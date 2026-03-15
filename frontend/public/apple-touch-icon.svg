@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <rect width="180" height="180" rx="40" fill="#0f1117"/>
+  <circle cx="90" cy="90" r="72" fill="none" stroke="#6366f1" stroke-width="3"/>
+  <circle cx="90" cy="90" r="50" fill="none" stroke="#4f46e5" stroke-width="1.5" opacity="0.5"/>
+  <polygon points="90,55 118,72 118,108 90,125 62,108 62,72" fill="#161b27" stroke="#252d40" stroke-width="1.5"/>
+  <text x="90" y="113" text-anchor="middle" font-family="system-ui,sans-serif" font-size="60" font-weight="800" fill="#6366f1">S</text>
+  <circle cx="90" cy="18" r="6" fill="#6366f1"/>
+  <circle cx="162" cy="90" r="5" fill="#10b981"/>
+  <circle cx="90" cy="162" r="5" fill="#f59e0b"/>
+  <circle cx="18" cy="90" r="5" fill="#3b82f6"/>
+</svg>
