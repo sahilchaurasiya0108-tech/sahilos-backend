@@ -2,33 +2,44 @@ import "@/styles/globals.css";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/context/AuthContext";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://sahilos.vercel.app";
+
 export const metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "SahilOS — Personal Life & Career OS",
-  description: "Your personal life and career operating system. Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "https://sahilos.vercel.app"
-  ),
+  description:
+    "Your personal operating system. Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    apple: "/apple-touch-icon.svg",
+    icon: [
+      { url: "/favicon.svg",    type: "image/svg+xml" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple:   "/favicon-192.png",
+    other: [
+      { rel: "mask-icon", url: "/favicon.svg", color: "#6366f1" },
+    ],
   },
   openGraph: {
-    title: "SahilOS — Personal Operating System",
+    type:        "website",
+    url:         SITE_URL,
+    title:       "SahilOS — Personal Operating System",
     description: "Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
-    images: [{ url: "/og-image.svg", width: 1200, height: 630 }],
-    type: "website",
+    siteName:    "SahilOS",
+    images: [{
+      url:    "/og-image.png",
+      width:  1200,
+      height: 630,
+      alt:    "SahilOS — Personal Operating System",
+    }],
   },
   twitter: {
-    card: "summary_large_image",
-    title: "SahilOS — Personal Operating System",
+    card:        "summary_large_image",
+    title:       "SahilOS — Personal Operating System",
     description: "Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
-    images: ["/og-image.svg"],
+    images:      ["/og-image.png"],
   },
-};
-
-// themeColor must live in viewport export, not metadata
-export const viewport = {
   themeColor: "#6366f1",
+  manifest:   "/site.webmanifest",
 };
 
 export default function RootLayout({ children }) {
