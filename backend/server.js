@@ -81,4 +81,22 @@ process.on("unhandledRejection", (err) => {
   server.close(() => process.exit(1));
 });
 
+// ── Keep-alive ping (prevents Render free tier from sleeping) ─────────────────
+// Pings own health endpoint every 14 minutes in production
+if (process.env.NODE_ENV === "production" && process.env.RENDER_EXTERNAL_URL) {
+  const https = require("https");
+  const PING_URL = `${process.env.RENDER_EXTERNAL_URL}/api/health`;
+  const INTERVAL = 14 * 60 * 1000; // 14 minutes
+
+  setInterval(() => {
+    https.get(PING_URL, (res) => {
+      console.log(`🏓 Keep-alive ping → ${res.statusCode}`);
+    }).on("error", (err) => {
+      console.warn("⚠️  Keep-alive ping failed:", err.message);
+    });
+  }, INTERVAL);
+
+  console.log(`🏓 Keep-alive enabled — pinging every 14 minutes`);
+}
+
 module.exports = app;
