@@ -944,8 +944,12 @@ export default function JournalPage() {
 
               {/* Stats + collapse toggle */}
               <div className="flex items-center gap-2 sm:gap-3">
+                {/* Badges — always on desktop, hidden on mobile when collapsed */}
                 {streak > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl" style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.15)" }}>
+                  <div
+                    className={headerCollapsed ? "hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl" : "flex items-center gap-1.5 px-3 py-2 rounded-xl"}
+                    style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.15)" }}
+                  >
                     <Flame size={13} style={{ color: "#fbbf24" }} />
                     <div>
                       <p className="font-bold tabular-nums leading-none" style={{ color: "#fbbf24" }}>{streak}</p>
@@ -954,7 +958,10 @@ export default function JournalPage() {
                   </div>
                 )}
                 {totalEntries > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl" style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.15)" }}>
+                  <div
+                    className={headerCollapsed ? "hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl" : "flex items-center gap-1.5 px-3 py-2 rounded-xl"}
+                    style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.15)" }}
+                  >
                     <BookOpen size={13} style={{ color: "#818cf8" }} />
                     <div>
                       <p className="font-bold tabular-nums leading-none" style={{ color: "#818cf8" }}>{totalEntries}</p>
@@ -965,8 +972,8 @@ export default function JournalPage() {
                 {/* Collapse toggle — mobile only */}
                 <button
                   onClick={() => setHeaderCollapsed((v) => !v)}
-                  className="sm:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-all"
-                  style={{ color: "#475569", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+                  className="sm:hidden flex items-center justify-center rounded-lg transition-all"
+                  style={{ width: 70, height: 34, color: "#475569", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", fontSize: 14 }}
                 >
                   {headerCollapsed ? "Show ↓" : "Hide ↑"}
                 </button>
