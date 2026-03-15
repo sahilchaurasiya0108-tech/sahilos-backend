@@ -4,20 +4,22 @@ import { AuthProvider } from "@/context/AuthContext";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://sahilos.vercel.app";
 
+// ── viewport export (themeColor lives here in Next.js 14) ─────────────────────
+export const viewport = {
+  themeColor: "#6366f1",
+};
+
+// ── metadata export ────────────────────────────────────────────────────────────
 export const metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "SahilOS — Personal Life & Career OS",
-  description:
-    "Your personal operating system. Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
+  title: {
+    default:  "SahilOS — Personal OS",
+    template: "%s | SahilOS",
+  },
+  description: "Your personal operating system. Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
   icons: {
-    icon: [
-      { url: "/favicon.svg",    type: "image/svg+xml" },
-      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
-    ],
-    apple:   "/favicon-192.png",
-    other: [
-      { rel: "mask-icon", url: "/favicon.svg", color: "#6366f1" },
-    ],
+    icon:  [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: "/apple-touch-icon.svg",
   },
   openGraph: {
     type:        "website",
@@ -38,8 +40,6 @@ export const metadata = {
     description: "Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
     images:      ["/og-image.png"],
   },
-  themeColor: "#6366f1",
-  manifest:   "/site.webmanifest",
 };
 
 export default function RootLayout({ children }) {
