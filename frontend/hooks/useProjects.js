@@ -70,10 +70,13 @@ export function useHabits() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
+  // Always send client's local date so backend uses IST not UTC
+  const localDate = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local timezone
+
   const fetchHabits = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/habits");
+      const res = await api.get(`/habits?localDate=${localDate}`);
       setHabits(res.data.data);
       setError(null);
     } catch (err) {
@@ -81,7 +84,7 @@ export function useHabits() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [localDate]);
 
   useEffect(() => { fetchHabits(); }, [fetchHabits]);
 
@@ -100,16 +103,15 @@ export function useHabits() {
   }, []);
 
   const logToday = useCallback(async (id) => {
-    const res = await api.post(`/habits/${id}/log`);
-    // Refresh list to get updated streak + completedToday flag
+    const res = await api.post(`/habits/${id}/log`, { localDate });
     await fetchHabits();
     return res.data.data;
-  }, [fetchHabits]);
+  }, [fetchHabits, localDate]);
 
   const unlogToday = useCallback(async (id) => {
-    await api.delete(`/habits/${id}/log`);
+    await api.delete(`/habits/${id}/log`, { data: { localDate } });
     await fetchHabits();
-  }, [fetchHabits]);
+  }, [fetchHabits, localDate]);
 
   const deleteHabit = useCallback(async (id) => {
     await api.delete(`/habits/${id}`);

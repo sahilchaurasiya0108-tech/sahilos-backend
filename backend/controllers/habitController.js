@@ -32,11 +32,11 @@ const getHabits = asyncHandler(async (req, res) => {
     Habit.countDocuments(filter),
   ]);
 
-  // Attach "completedToday" flag to each habit
-  const todayStr = normaliseDate(new Date());
+  // Use client's local date if sent as query param, otherwise UTC
+  const todayStr = req.query.localDate || normaliseDate(new Date());
   const todayLogs = await HabitLog.find({
     userId: req.user._id,
-    completedDate: toMidnightUTC(),
+    completedDate: toMidnightUTC(todayStr),
   })
     .select("habitId")
     .lean();
@@ -145,7 +145,10 @@ const logToday = asyncHandler(async (req, res) => {
     throw new Error("Habit not found");
   }
 
-  const completedDate = toMidnightUTC();
+  // Use client's local date if provided (YYYY-MM-DD), otherwise fall back to UTC
+  // This fixes the IST/UTC gap — at 12:20 AM IST the server is still on yesterday UTC
+  const localDateStr = req.body.localDate; // e.g. "2026-03-17"
+  const completedDate = toMidnightUTC(localDateStr || null);
 
   // Upsert — safe to call multiple times on same day
   const log = await HabitLog.findOneAndUpdate(
@@ -184,7 +187,8 @@ const logToday = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const unlogToday = asyncHandler(async (req, res) => {
-  const completedDate = toMidnightUTC();
+  const localDateStr = req.body.localDate;
+  const completedDate = toMidnightUTC(localDateStr || null);
 
   await HabitLog.findOneAndDelete({
     habitId: req.params.id,
