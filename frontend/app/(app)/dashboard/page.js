@@ -23,7 +23,6 @@ import { format, subDays } from "date-fns";
 export default function DashboardPage() {
   const { data, loading, error } = useDashboard();
   const { achievements, summary: achSummary } = useAchievements();
-
   const today = format(new Date(), "yyyy-MM-dd");
   const from  = format(subDays(new Date(), 182), "yyyy-MM-dd");
   const { stats: heatmapStats, loading: heatmapLoading } = useDailyStat({ from, to: today });
@@ -46,29 +45,35 @@ export default function DashboardPage() {
 
   return (
     <PageWrapper>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto space-y-3">
 
-        {/* Greeting hero */}
+        {/* ── Hero ── */}
         <GreetingCard name={data.greeting.name} />
 
-        {/* Row 1 */}
-        <FocusTasksWidget tasks={data.focusTasks} />
-        <HabitStreakWidget habits={data.habits} />
-        <TaskStatsWidget stats={data.taskStats} />
+        {/* ── Row 1: Tasks + Habits + Task Stats ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <FocusTasksWidget tasks={data.focusTasks} />
+          <HabitStreakWidget habits={data.habits} />
+          <TaskStatsWidget stats={data.taskStats} />
+        </div>
 
-        {/* Row 2 */}
-        <ProjectProgressWidget projects={data.activeProjects} />
-        <JobPipelineWidget pipeline={data.jobPipeline} />
-        <LearningWidget items={data.learningInProgress} />
+        {/* ── Row 2: Projects + Jobs + Learning ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <ProjectProgressWidget projects={data.activeProjects} />
+          <JobPipelineWidget pipeline={data.jobPipeline} />
+          <LearningWidget items={data.learningInProgress} />
+        </div>
 
-        {/* Row 3 — Budget + Achievements */}
-        <BudgetWidget budget={data.budget} />
-        <AchievementsWidget achievements={achievements} summary={achSummary} />
-        <ActivityFeedWidget activities={data.recentActivity} />
+        {/* ── Row 3: Budget + Achievements + Activity ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <BudgetWidget budget={data.budget} />
+          <AchievementsWidget achievements={achievements} summary={achSummary} />
+          <ActivityFeedWidget activities={data.recentActivity} />
+        </div>
 
-        {/* Heatmap — full width */}
+        {/* ── Heatmap full width ── */}
         {!heatmapLoading && (
-          <div className="col-span-full">
+          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(145deg, #161b27 0%, #111520 100%)", border: "1px solid #ffffff0d" }}>
             <LifeHeatmap stats={heatmapStats} weeks={26} />
           </div>
         )}

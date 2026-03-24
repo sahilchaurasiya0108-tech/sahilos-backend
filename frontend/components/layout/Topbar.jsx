@@ -4,17 +4,21 @@ import { format } from "date-fns";
 import { Calendar } from "lucide-react";
 
 const PAGE_TITLES = {
-  "/dashboard": "Dashboard",
-  "/tasks":     "Tasks",
-  "/projects":  "Projects",
-  "/habits":    "Habits",
-  "/ideas":     "Idea Vault",
-  "/jobs":      "Job Pipeline",
-  "/learning":  "Learning Tracker",
-  "/budget":    "Budget",
-  "/journal":   "Daily Journal",
-  "/activity":  "Activity Timeline",
-  "/ai":        "AI Assistant",
+  "/dashboard":    "Dashboard",
+  "/tasks":        "Tasks",
+  "/projects":     "Projects",
+  "/habits":       "Habits",
+  "/ideas":        "Idea Vault",
+  "/jobs":         "Job Pipeline",
+  "/learning":     "Learning Tracker",
+  "/budget":       "Budget",
+  "/journal":      "Daily Journal",
+  "/activity":     "Activity Timeline",
+  "/ai":           "AI Assistant",
+  "/knowledge":    "Knowledge Vault",
+  "/vision":       "Life Vision",
+  "/heatmap":      "Life Heatmap",
+  "/achievements": "Achievements",
 };
 
 export default function Topbar() {

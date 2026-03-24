@@ -603,19 +603,37 @@ function EntryCard({ dateStr, entryData, onOpenFocus, onStickerDrop, pickedStick
       {/* Card */}
       <div
         className="ml-9 rounded-2xl transition-all duration-200 overflow-hidden cursor-pointer"
-        style={{
-          background: expanded ? "rgba(255,255,255,0.03)" : hasEntry ? "rgba(255,255,255,0.02)" : "transparent",
-          border: dragOver
-            ? "1.5px dashed rgba(99,102,241,0.5)"
-            : pickedSticker
-            ? "1.5px dashed rgba(99,102,241,0.3)"
-            : expanded
-            ? "1px solid rgba(255,255,255,0.07)"
-            : hasEntry
-            ? "1px solid rgba(255,255,255,0.04)"
-            : "1px solid rgba(255,255,255,0.02)",
-          ...(moodCfg && hasEntry ? { borderLeft: `3px solid ${moodCfg.color}55` } : {}),
-        }}
+        style={(() => {
+  const isDashed = dragOver || pickedSticker;
+  const borderWidth = isDashed ? "1.5px" : "1px";
+  const borderStyle = isDashed ? "dashed" : "solid";
+  const borderColor = dragOver
+    ? "rgba(99,102,241,0.5)"
+    : pickedSticker
+    ? "rgba(99,102,241,0.3)"
+    : expanded
+    ? "rgba(255,255,255,0.07)"
+    : hasEntry
+    ? "rgba(255,255,255,0.04)"
+    : "rgba(255,255,255,0.02)";
+  const borderLeftColor = (moodCfg && hasEntry && !isDashed)
+    ? `${moodCfg.color}55`
+    : borderColor;
+  const borderLeftWidth = (moodCfg && hasEntry && !isDashed) ? "3px" : borderWidth;
+
+  return {
+    background: expanded ? "rgba(255,255,255,0.03)" : hasEntry ? "rgba(255,255,255,0.02)" : "transparent",
+    borderTopWidth: borderWidth,
+    borderRightWidth: borderWidth,
+    borderBottomWidth: borderWidth,
+    borderLeftWidth,
+    borderStyle,
+    borderTopColor: borderColor,
+    borderRightColor: borderColor,
+    borderBottomColor: borderColor,
+    borderLeftColor,
+  };
+})()}
         onClick={handleCardClick}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
