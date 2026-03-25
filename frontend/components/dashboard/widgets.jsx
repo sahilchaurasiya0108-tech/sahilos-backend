@@ -22,25 +22,24 @@ function useDailyQuote(name) {
     const cacheKey = `daily_quote_${today}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) { setQuote(JSON.parse(cached)); setLoading(false); return; }
-    const hour = new Date().getHours();
-    const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-    const dayOfWeek = format(new Date(), "EEEE");
-    fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 120,
-        messages: [{ role: "user", content: `Generate a short, punchy motivational quote for a developer/student named ${name} on a ${dayOfWeek} ${timeOfDay}. Return ONLY a JSON object like: {"quote": "...", "author": "...", "vibe": "energetic|calm|focused|ambitious"}. Make the quote feel fresh, not cliché. Max 20 words. Real author or "Anonymous". No preamble, just the JSON.` }],
-      }),
+
+    // Call our own backend — never call Anthropic/Groq directly from the browser
+    const token = typeof window !== "undefined" ? localStorage.getItem("sahilos_token") : null;
+    fetch("/api/ai/daily-quote", {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     })
       .then((r) => r.json())
       .then((data) => {
-        const text = data.content?.[0]?.text || "";
-        const clean = text.replace(/```json|```/g, "").trim();
-        const parsed = JSON.parse(clean);
-        sessionStorage.setItem(cacheKey, JSON.stringify(parsed));
-        setQuote(parsed);
+        const parsed = data?.data;
+        if (parsed?.quote) {
+          sessionStorage.setItem(cacheKey, JSON.stringify(parsed));
+          setQuote(parsed);
+        } else {
+          throw new Error("empty");
+        }
       })
       .catch(() => {
         const fallbacks = [

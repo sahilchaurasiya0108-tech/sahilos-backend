@@ -196,7 +196,7 @@ const unlogToday = asyncHandler(async (req, res) => {
     completedDate,
   });
 
-  // Recalculate streaks after removal
+  // Recalculate both streaks after removal
   const habit = await Habit.findById(req.params.id);
   if (habit) {
     const allLogs = await HabitLog.find({ habitId: habit._id })
@@ -204,6 +204,7 @@ const unlogToday = asyncHandler(async (req, res) => {
       .lean();
     const dates = allLogs.map((l) => l.completedDate);
     habit.currentStreak = calculateCurrentStreak(dates);
+    habit.longestStreak = calculateLongestStreak(dates);
     await habit.save();
   }
 
