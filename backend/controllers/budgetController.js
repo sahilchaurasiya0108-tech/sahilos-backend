@@ -2,6 +2,28 @@ const asyncHandler = require("../middleware/asyncHandler");
 const Budget = require("../models/Budget");
 const { getPagination } = require("../utils/pagination");
 const { invalidateDashboardCache } = require("./dashboardController");
+const { notifyBudgetWarning } = require("../utils/notificationService");
+
+// ── Budget warning thresholds (% of monthly spend per category) ───────────────
+const WARN_THRESHOLDS = { food: 5000, transport: 3000, entertainment: 3000, shopping: 5000, other: 10000 };
+
+async function checkBudgetWarning(userId, category, type) {
+  if (type !== "expense") return;
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const result = await Budget.aggregate([
+      { $match: { userId, type: "expense", category, isDeleted: false, date: { $gte: monthStart } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const total = result[0]?.total || 0;
+    const threshold = WARN_THRESHOLDS[category] || WARN_THRESHOLDS.other;
+    const pct = Math.round((total / threshold) * 100);
+    if (pct >= 80) {
+      notifyBudgetWarning(userId, category, pct);
+    }
+  } catch (_) {}
+}
 
 /**
  * @desc    Get all budget entries (paginated, filterable)
@@ -110,6 +132,7 @@ const createBudgetEntry = asyncHandler(async (req, res) => {
   });
 
   invalidateDashboardCache(req.user._id);
+  checkBudgetWarning(req.user._id, entry.category, entry.type);
   res.status(201).json({ success: true, data: entry });
 });
 

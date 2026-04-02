@@ -106,6 +106,12 @@ const evaluateAchievements = (userId) => {
           logActivity(userId, "achievement_unlocked", ach._id, ach.title, {
             icon: ach.icon,
           });
+
+          // Fire notification
+          try {
+            const { notifyAchievementUnlocked } = require("./notificationService");
+            notifyAchievementUnlocked(userId, ach.title, ach._id);
+          } catch (_) {}
         }
       }
     } catch (err) {

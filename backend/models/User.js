@@ -37,6 +37,10 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    lastActiveAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,

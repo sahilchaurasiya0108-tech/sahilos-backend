@@ -173,6 +173,16 @@ const logToday = asyncHandler(async (req, res) => {
   logActivity(req.user._id, "habit_completed", habit._id, habit.title, {
     streak: habit.currentStreak,
   });
+
+  // Notify on streak milestones
+  const milestones = [7, 14, 21, 30, 60, 100];
+  if (milestones.includes(habit.currentStreak)) {
+    try {
+      const { notifyHabitMilestone } = require("../utils/notificationService");
+      notifyHabitMilestone(req.user._id, habit.title, habit._id, habit.currentStreak);
+    } catch (_) {}
+  }
+
   invalidateDashboardCache(req.user._id);
   evaluateAchievements(req.user._id);
   res.json({

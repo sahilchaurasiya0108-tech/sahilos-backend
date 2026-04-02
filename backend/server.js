@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 
 const connectDB = require("./config/db");
 const errorHandler = require("./middleware/errorHandler");
+const { trackActivity } = require("./middleware/trackActivity");
 
 // ── Route imports ──────────────────────────────────────────────────────────────
 const authRoutes = require("./routes/auth");
@@ -23,10 +24,17 @@ const knowledgeRoutes = require("./routes/knowledge");
 const lifeVisionRoutes = require("./routes/lifeVision");
 const dailyStatRoutes = require("./routes/dailyStat");
 const achievementRoutes = require("./routes/achievements");
+const notificationRoutes = require("./routes/notifications");
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────────
 dotenv.config();
-connectDB();
+connectDB().then(() => {
+  // Init cron jobs after DB is ready
+  try {
+    const { initCronJobs } = require("./utils/notificationCron");
+    initCronJobs();
+  } catch (_) {}
+});
 
 const app = express();
 
@@ -49,6 +57,9 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", env: process.env.NODE_ENV, ts: new Date() });
 });
 
+// ── Activity tracking (updates lastActiveAt for authenticated users) ───────────
+app.use("/api", trackActivity);
+
 // ── API routes ─────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
@@ -66,6 +77,7 @@ app.use("/api/knowledge", knowledgeRoutes);
 app.use("/api/vision", lifeVisionRoutes);
 app.use("/api/daily-stats", dailyStatRoutes);
 app.use("/api/achievements", achievementRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // ── 404 handler ────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

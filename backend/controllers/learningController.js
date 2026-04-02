@@ -87,6 +87,23 @@ const patchProgress = asyncHandler(async (req, res) => {
 
   logActivity(req.user._id, "learning_updated", item._id, item.title, { progress });
   invalidateDashboardCache(req.user._id);
+
+  // Notify on completion
+  if (progress === 100) {
+    try {
+      const { createNotification } = require("../utils/notificationService");
+      createNotification({
+        userId: req.user._id,
+        title: "🎓 Learning item completed!",
+        message: `You finished "${item.title}". Knowledge unlocked 🧠`,
+        type: "info",
+        category: "learning",
+        actionLink: "/learning",
+        metadata: { itemId: item._id },
+      });
+    } catch (_) {}
+  }
+
   res.json({ success: true, data: item });
 });
 

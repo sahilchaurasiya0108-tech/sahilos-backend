@@ -59,6 +59,20 @@ const upsertEntry = asyncHandler(async (req, res) => {
 
   if (isNew) {
     logActivity(req.user._id, "journal_written", entry._id, `Journal — ${date}`, { mood });
+
+    // Celebrate first journal entry of the day
+    try {
+      const { createNotification } = require("../utils/notificationService");
+      createNotification({
+        userId: req.user._id,
+        title: "📓 Journal entry saved",
+        message: "Great — you showed up for yourself today. Keep the streak alive.",
+        type: "info",
+        category: "journal",
+        actionLink: "/journal",
+        metadata: { date, mood },
+      });
+    } catch (_) {}
   }
 
   res.status(isNew ? 201 : 200).json({ success: true, data: entry });

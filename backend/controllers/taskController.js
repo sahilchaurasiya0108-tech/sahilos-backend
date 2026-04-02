@@ -121,6 +121,7 @@ const updateTask = asyncHandler(async (req, res) => {
   // Log completion specifically
   if (req.body.status === "done") {
     logActivity(req.user._id, "task_completed", task._id, task.title);
+    evaluateAchievements(req.user._id);
   }
   invalidateDashboardCache(req.user._id);
   res.json({ success: true, data: task });

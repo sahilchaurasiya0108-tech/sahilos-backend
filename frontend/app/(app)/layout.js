@@ -8,6 +8,7 @@ import Topbar from "@/components/layout/Topbar";
 import { Spinner } from "@/components/ui";
 import { AchievementProvider } from "@/hooks/useAchievements";
 import { AchievementPopupQueue } from "@/components/achievements/AchievementPopup";
+import { NotificationProvider } from "@/context/NotificationContext";
 
 function AppShell({ children }) {
   const [queue, setQueue] = useState([]);
@@ -21,17 +22,19 @@ function AppShell({ children }) {
   };
 
   return (
-    <AchievementProvider onUnlock={handleUnlock}>
-      <div className="flex h-screen bg-surface overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Topbar />
-          <main className="flex-1 overflow-y-auto">{children}</main>
+    <NotificationProvider>
+      <AchievementProvider onUnlock={handleUnlock}>
+        <div className="flex h-screen bg-surface overflow-hidden">
+          <Sidebar />
+          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            <Topbar />
+            <main className="flex-1 overflow-y-auto">{children}</main>
+          </div>
+          {/* Global popup — on top of everything, on every page */}
+          <AchievementPopupQueue queue={queue} onDismiss={handleDismiss} />
         </div>
-        {/* Global popup — on top of everything, on every page */}
-        <AchievementPopupQueue queue={queue} onDismiss={handleDismiss} />
-      </div>
-    </AchievementProvider>
+      </AchievementProvider>
+    </NotificationProvider>
   );
 }
 
