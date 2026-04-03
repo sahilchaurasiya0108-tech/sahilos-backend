@@ -57,6 +57,22 @@ export function useNotifications() {
     return () => clearInterval(pollerRef.current);
   }, [pollUnreadCount]);
 
+  // FIX: when a push arrives, the SW posts "NOTIFICATION_RECEIVED" — 
+  // immediately refresh the list so new notifications appear without needing
+  // a manual page reload.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+
+    const handleMessage = (event) => {
+      if (event.data?.type === "NOTIFICATION_RECEIVED") {
+        fetchNotifications({ reset: true });
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", handleMessage);
+  }, [fetchNotifications]);
+
   // ── Actions ──────────────────────────────────────────────────────────────────
   const markAsRead = useCallback(async (id) => {
     await api.patch(`/notifications/${id}/read`);

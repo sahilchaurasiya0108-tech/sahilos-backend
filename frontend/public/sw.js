@@ -28,7 +28,9 @@ self.addEventListener("push", (event) => {
     body: data.body || data.message || "",
     icon: data.icon || "/favicon.svg",
     badge: data.badge || "/favicon.svg",
-    tag: data.tag || "sahilos-notification",
+    // FIX: unique tag per notification so every push shows on phone.
+    // Same tag = silent replacement (the old behaviour swallowed notifications).
+    tag: data.tag || `sahilos-${Date.now()}`,
     renotify: true,
     data: { url: data.url || "/" },
     actions: [
@@ -39,7 +41,18 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "SahilOS", options)
+    Promise.all([
+      // 1. Show the OS notification on the phone
+      self.registration.showNotification(data.title || "SahilOS", options),
+
+      // 2. Tell any open app tabs to refresh their notification list immediately
+      //    instead of waiting for the 30-second poll
+      clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+        for (const client of clientList) {
+          client.postMessage({ type: "NOTIFICATION_RECEIVED" });
+        }
+      }),
+    ])
   );
 });
 
