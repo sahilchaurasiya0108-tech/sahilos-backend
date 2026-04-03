@@ -146,7 +146,37 @@ const getVapidKey = asyncHandler(async (req, res) => {
   });
 });
 
-// ── POST /notifications/fun (generate a fun one on demand) ────────────────────
+// ── POST /notifications/cleanup-duplicates (deduplicate overdue spam) ─────────
+const cleanupDuplicates = asyncHandler(async (req, res) => {
+  // For each task, keep only the FIRST overdue notification, delete the rest
+  const overdueDups = await Notification.aggregate([
+    {
+      $match: {
+        userId: req.user._id,
+        category: "task",
+        title: { $regex: "Overdue", $options: "i" },
+      },
+    },
+    { $sort: { "metadata.taskId": 1, createdAt: 1 } },
+    {
+      $group: {
+        _id: "$metadata.taskId",
+        ids: { $push: "$_id" },
+      },
+    },
+  ]);
+
+  let deleted = 0;
+  for (const group of overdueDups) {
+    const [_keep, ...dupes] = group.ids;
+    if (dupes.length > 0) {
+      const result = await Notification.deleteMany({ _id: { $in: dupes } });
+      deleted += result.deletedCount;
+    }
+  }
+
+  res.json({ success: true, message: `Cleaned up ${deleted} duplicate notifications` });
+});
 const sendFunNotification = asyncHandler(async (req, res) => {
   const { category } = req.body;
   const fun = generateFunNotification(category);
@@ -172,4 +202,5 @@ module.exports = {
   unsubscribePush,
   getVapidKey,
   sendFunNotification,
+  cleanupDuplicates,
 };

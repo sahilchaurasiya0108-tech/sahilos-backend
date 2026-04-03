@@ -34,20 +34,22 @@ async function checkTasksDueSoon() {
     const now = new Date();
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
+    // "done" is the correct status value in this project (not "completed")
     const tasks = await Task.find({
       dueDate: { $gte: now, $lte: in24h },
-      status: { $ne: "completed" },
+      status: { $nin: ["done"] },
+      isDeleted: false,
     }).lean();
 
     for (const task of tasks) {
       const hoursLeft = Math.round((new Date(task.dueDate) - now) / (1000 * 60 * 60));
 
-      // Avoid duplicate notifications (check last 2h)
+      // One "due soon" notification per task per 12 hours max
       const existing = await Notification.findOne({
         userId: task.userId,
         "metadata.taskId": String(task._id),
         category: "task",
-        createdAt: { $gte: new Date(now.getTime() - 2 * 60 * 60 * 1000) },
+        createdAt: { $gte: new Date(now.getTime() - 12 * 60 * 60 * 1000) },
       });
 
       if (!existing) {
@@ -59,24 +61,28 @@ async function checkTasksDueSoon() {
   }
 }
 
-// ── Job: Check overdue tasks (every 6h) ───────────────────────────────────────
+// ── Job: Check overdue tasks (once per day at 9 AM) ───────────────────────────
 
 async function checkOverdueTasks() {
   try {
     const now = new Date();
+
+    // Only find tasks that are NOT done and NOT deleted
     const tasks = await Task.find({
       dueDate: { $lt: now },
-      status: { $ne: "completed" },
+      status: { $nin: ["done"] },        // "done" is the real status value
+      isDeleted: false,
     }).lean();
 
     for (const task of tasks) {
+      // Only send ONE overdue notification per task ever (not per run)
       const existing = await Notification.findOne({
         userId: task.userId,
         "metadata.taskId": String(task._id),
         category: "task",
-        type: "important",
-        createdAt: { $gte: new Date(now.getTime() - 6 * 60 * 60 * 1000) },
+        title: { $regex: "Overdue", $options: "i" },
       });
+
       if (!existing) {
         const { notifyTaskOverdue } = require("./notificationService");
         await notifyTaskOverdue(task.userId, task.title, task._id);
@@ -230,8 +236,8 @@ function initCronJobs() {
   // Every hour — check tasks due soon
   cron.schedule("0 * * * *", checkTasksDueSoon);
 
-  // Every 6 hours — check overdue tasks
-  cron.schedule("0 */6 * * *", checkOverdueTasks);
+  // Once daily at 9 AM — check overdue tasks (one notification per task, ever)
+  cron.schedule("0 9 * * *", checkOverdueTasks);
 
   // Daily 8 PM — habit streak danger
   cron.schedule("0 20 * * *", checkHabitStreaks);

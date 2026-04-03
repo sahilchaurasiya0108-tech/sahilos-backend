@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Bell, CheckCheck, Trash2, Sparkles, AlertCircle, Info, RefreshCw, X } from "lucide-react";
+import { Bell, CheckCheck, Trash2, Sparkles, AlertCircle, Info, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -96,7 +96,6 @@ function NotificationCard({ notification, onRead, onDelete }) {
 }
 
 export default function NotificationsPage() {
-  const router = useRouter();
   const {
     notifications,
     unreadCount,
@@ -154,18 +153,11 @@ export default function NotificationsPage() {
               Clear
             </button>
           )}
-          <button
-            onClick={() => router.back()}
-            className="p-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-surface-3 transition-colors"
-            title="Close"
-          >
-            <X size={16} />
-          </button>
         </div>
       </div>
 
       {/* Push settings */}
-      <PushNotificationSettings />
+      <PushNotificationSettings onCleanup={refresh} />
 
       {/* Filters */}
       <div className="flex gap-2 mb-5 overflow-x-auto pb-1 scrollbar-none">
