@@ -11,11 +11,13 @@ try {
       process.env.VAPID_PUBLIC_KEY,
       process.env.VAPID_PRIVATE_KEY
     );
+    console.log("✅ web-push VAPID configured");
   } else {
-    webpush = null; // VAPID not configured
+    console.warn("⚠️  VAPID keys missing — push notifications disabled. Add VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY to .env");
+    webpush = null;
   }
 } catch (_) {
-  // web-push not installed — push notifications disabled
+  console.warn("⚠️  web-push not installed — push notifications disabled.");
 }
 
 // ── Core create ────────────────────────────────────────────────────────────────
@@ -55,10 +57,16 @@ async function createNotification({
 // ── Web Push ───────────────────────────────────────────────────────────────────
 
 async function sendPushToUser(userId, { title, message, actionLink = "/" }) {
-  if (!webpush) return;
+  if (!webpush) {
+    console.warn("sendPushToUser: webpush not configured, skipping.");
+    return;
+  }
 
   const subs = await PushSubscription.find({ userId });
-  if (!subs.length) return;
+  if (!subs.length) {
+    console.warn(`sendPushToUser: no subscriptions found for user ${userId}`);
+    return;
+  }
 
   const payload = JSON.stringify({
     title,
@@ -76,9 +84,13 @@ async function sendPushToUser(userId, { title, message, actionLink = "/" }) {
   for (let i = 0; i < results.length; i++) {
     if (results[i].status === "rejected") {
       const statusCode = results[i].reason?.statusCode;
+      console.warn(`Push failed for sub ${subs[i]._id}: status=${statusCode}`, results[i].reason?.message);
       if (statusCode === 404 || statusCode === 410) {
         await PushSubscription.findByIdAndDelete(subs[i]._id);
+        console.log(`Removed stale subscription ${subs[i]._id}`);
       }
+    } else {
+      console.log(`✅ Push sent to sub ${subs[i]._id}`);
     }
   }
 }
@@ -136,7 +148,7 @@ async function notifyHabitMilestone(userId, habitName, habitId, streak) {
     category: "habit",
     actionLink: "/habits",
     metadata: { habitId, streak },
-    sendPush: false,
+    sendPush: true, // FIX: was false — milestones should push too
   });
 }
 
@@ -162,7 +174,7 @@ async function notifyBudgetWarning(userId, category, percentUsed) {
     category: "budget",
     actionLink: "/budget",
     metadata: { category, percentUsed },
-    sendPush: false,
+    sendPush: true, // FIX: was false — budget warnings should push
   });
 }
 
@@ -188,7 +200,7 @@ async function notifyLearningReminder(userId) {
     type: "info",
     category: "learning",
     actionLink: "/learning",
-    sendPush: false,
+    sendPush: true, // FIX: was false
   });
 }
 
@@ -200,7 +212,7 @@ async function notifyJournalReminder(userId) {
     type: "info",
     category: "journal",
     actionLink: "/journal",
-    sendPush: false,
+    sendPush: true, // FIX: was false
   });
 }
 

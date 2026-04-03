@@ -1,8 +1,9 @@
 /**
  * Scheduled notification jobs using node-cron.
- * Call initCronJobs(app) from server.js after DB connects.
+ * Call initCronJobs() from server.js after DB connects.
  *
- * Install: npm install node-cron
+ * All cron schedules run in IST (Asia/Kolkata) by default.
+ * Override via env: APP_TIMEZONE=Asia/Kolkata
  */
 
 let cron;
@@ -17,8 +18,36 @@ const Task = require("../models/Task");
 const Habit = require("../models/Habit");
 const HabitLog = require("../models/HabitLog");
 const Notification = require("../models/Notification");
-const { createNotification, notifyTaskDueSoon, notifyTaskOverdue, notifyHabitStreakDanger, notifyInactivity } = require("./notificationService");
-const { generateFunNotification, generateTimeAwareFunNotification } = require("./notificationGenerator");
+const {
+  createNotification,
+  notifyTaskDueSoon,
+  notifyTaskOverdue,
+  notifyHabitStreakDanger,
+  notifyInactivity,
+} = require("./notificationService");
+const {
+  generateFunNotification,
+  generateTimeAwareFunNotification,
+} = require("./notificationGenerator");
+
+// ── Timezone config ────────────────────────────────────────────────────────────
+
+/**
+ * The timezone used for all cron schedules and "today" date calculations.
+ * Defaults to Asia/Kolkata (IST). Set APP_TIMEZONE in .env to override.
+ */
+const APP_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Kolkata";
+
+/**
+ * Get today's date string (YYYY-MM-DD) in the app timezone.
+ * This matches how the dashboard and habit controller resolve "today"
+ * from the client's localDate param — both use the user's local date,
+ * not UTC.
+ */
+function getTodayStr(timezone = APP_TIMEZONE) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+  // en-CA locale produces YYYY-MM-DD format natively
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -34,7 +63,6 @@ async function checkTasksDueSoon() {
     const now = new Date();
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-    // "done" is the correct status value in this project (not "completed")
     const tasks = await Task.find({
       dueDate: { $gte: now, $lte: in24h },
       status: { $nin: ["done"] },
@@ -61,21 +89,20 @@ async function checkTasksDueSoon() {
   }
 }
 
-// ── Job: Check overdue tasks (once per day at 9 AM) ───────────────────────────
+// ── Job: Check overdue tasks (once per day at 9 AM IST) ───────────────────────
 
 async function checkOverdueTasks() {
   try {
     const now = new Date();
 
-    // Only find tasks that are NOT done and NOT deleted
     const tasks = await Task.find({
       dueDate: { $lt: now },
-      status: { $nin: ["done"] },        // "done" is the real status value
+      status: { $nin: ["done"] },
       isDeleted: false,
     }).lean();
 
     for (const task of tasks) {
-      // Only send ONE overdue notification per task ever (not per run)
+      // Only send ONE overdue notification per task ever
       const existing = await Notification.findOne({
         userId: task.userId,
         "metadata.taskId": String(task._id),
@@ -93,17 +120,18 @@ async function checkOverdueTasks() {
   }
 }
 
-// ── Job: Habit streak danger check (daily at 8 PM) ────────────────────────────
+// ── Job: Habit streak danger check (daily at 8 PM IST) ───────────────────────
 
 async function checkHabitStreaks() {
   try {
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    // FIX: use IST "today", matching how habit controller resolves localDate
+    const todayStr = getTodayStr();
 
     const habits = await Habit.find({ isActive: true }).lean();
 
     for (const habit of habits) {
-      // Check if already logged today
+      // Check if already logged today (in IST)
       const loggedToday = await HabitLog.findOne({
         habitId: habit._id,
         date: todayStr,
@@ -135,7 +163,7 @@ async function checkHabitStreaks() {
   }
 }
 
-// ── Job: Daily random fun notification (9 AM) ─────────────────────────────────
+// ── Job: Daily random fun notification (9 AM IST) ─────────────────────────────
 
 async function sendDailyFunNotification() {
   try {
@@ -155,14 +183,15 @@ async function sendDailyFunNotification() {
   }
 }
 
-// ── Job: Inactivity check (daily at 6 PM) ────────────────────────────────────
+// ── Job: Inactivity check (daily at 6 PM IST) ────────────────────────────────
 
 async function checkInactiveUsers() {
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const users = await User.find({
-      lastActiveAt: { $lt: cutoff },
-    }, "_id").lean();
+    const users = await User.find(
+      { lastActiveAt: { $lt: cutoff } },
+      "_id"
+    ).lean();
 
     for (const user of users) {
       const daysInactive = Math.floor(
@@ -183,7 +212,7 @@ async function checkInactiveUsers() {
   }
 }
 
-// ── Job: Weekly productivity summary (Sunday 8 AM) ───────────────────────────
+// ── Job: Weekly productivity summary (Sunday 8 AM IST) ───────────────────────
 
 async function sendWeeklySummary() {
   try {
@@ -204,15 +233,13 @@ async function sendWeeklySummary() {
   }
 }
 
-// ── Job: Evening journal reminder (9 PM daily) ───────────────────────────────
+// ── Job: Evening journal reminder (9 PM IST daily) ───────────────────────────
 
 async function sendJournalReminder() {
   try {
     const userIds = await getAllUserIds();
-    const today = new Date().toISOString().split("T")[0];
 
     for (const userId of userIds) {
-      // Skip if they already journaled today (optional check)
       await createNotification({
         userId,
         title: "📓 Evening reflection",
@@ -233,28 +260,30 @@ async function sendJournalReminder() {
 function initCronJobs() {
   if (!cron) return;
 
-  // Every hour — check tasks due soon
-  cron.schedule("0 * * * *", checkTasksDueSoon);
+  const tz = { timezone: APP_TIMEZONE };
 
-  // Once daily at 9 AM — check overdue tasks (one notification per task, ever)
-  cron.schedule("0 9 * * *", checkOverdueTasks);
+  // Every hour — check tasks due soon (no timezone needed, uses absolute time)
+  cron.schedule("0 * * * *", checkTasksDueSoon, tz);
 
-  // Daily 8 PM — habit streak danger
-  cron.schedule("0 20 * * *", checkHabitStreaks);
+  // 9 AM IST — check overdue tasks
+  cron.schedule("0 9 * * *", checkOverdueTasks, tz);
 
-  // Daily 9 AM — fun notification
-  cron.schedule("0 9 * * *", sendDailyFunNotification);
+  // 8 PM IST — habit streak danger
+  cron.schedule("0 20 * * *", checkHabitStreaks, tz);
 
-  // Daily 6 PM — inactivity check
-  cron.schedule("0 18 * * *", checkInactiveUsers);
+  // 9 AM IST — fun notification
+  cron.schedule("0 9 * * *", sendDailyFunNotification, tz);
 
-  // Daily 9 PM — journal reminder
-  cron.schedule("0 21 * * *", sendJournalReminder);
+  // 6 PM IST — inactivity check
+  cron.schedule("0 18 * * *", checkInactiveUsers, tz);
 
-  // Sunday 8 AM — weekly summary
-  cron.schedule("0 8 * * 0", sendWeeklySummary);
+  // 9 PM IST — journal reminder
+  cron.schedule("0 21 * * *", sendJournalReminder, tz);
 
-  console.log("⏰ Notification cron jobs initialized");
+  // Sunday 8 AM IST — weekly summary
+  cron.schedule("0 8 * * 0", sendWeeklySummary, tz);
+
+  console.log(`⏰ Notification cron jobs initialized (timezone: ${APP_TIMEZONE})`);
 }
 
 module.exports = {
