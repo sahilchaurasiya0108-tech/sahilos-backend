@@ -6,6 +6,7 @@ const Habit = require("../models/Habit");
 const Budget = require("../models/Budget");
 const LearningItem = require("../models/LearningItem");
 const { logActivity } = require("../utils/activityLogger");
+const { evaluateAchievements } = require("../utils/achievementEngine");
 const { getPagination } = require("../utils/pagination");
 
 // ── Existing endpoints (unchanged) ────────────────────────────────────────────
@@ -73,6 +74,8 @@ const upsertEntry = asyncHandler(async (req, res) => {
         metadata: { date, mood },
       });
     } catch (_) {}
+
+    evaluateAchievements(req.user._id);
   }
 
   res.status(isNew ? 201 : 200).json({ success: true, data: entry });

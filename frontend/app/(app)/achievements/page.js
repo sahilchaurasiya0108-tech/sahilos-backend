@@ -1,212 +1,258 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAchievements } from "@/hooks/useAchievements";
-import { Button, Spinner, ProgressBar } from "@/components/ui";
+import { Spinner } from "@/components/ui";
 import PageWrapper from "@/components/layout/PageWrapper";
-import { RefreshCw, X, Lock, CheckCircle } from "lucide-react";
-import clsx from "clsx";
+import { RefreshCw, X, Lock, CheckCircle2, Star, Zap, Diamond, Flame, Crown, Trophy, Search } from "lucide-react";
 import { createPortal } from "react-dom";
+import clsx from "clsx";
 
-// ── Full achievement catalog with tier progression ────────────────────────────
-// Each "series" shows progression: bronze → silver → gold → diamond
-const SERIES = [
-  {
-    id: "habit_streak",
-    label: "Habit Warrior",
-    description: "Build unbreakable daily habits",
-    tiers: [
-      { key: "habit_streak_7",   icon: "🔥", title: "7-Day Streak",    ring: "#f59e0b", needed: 7,   unit: "days" },
-      { key: "habit_streak_30",  icon: "🌟", title: "30-Day Streak",   ring: "#a855f7", needed: 30,  unit: "days" },
-      { key: "habit_streak_100", icon: "💎", title: "Century Streak",  ring: "#06b6d4", needed: 100, unit: "days" },
-    ],
-    conditionType: "habit_streak",
-  },
-  {
-    id: "tasks",
-    label: "Task Slayer",
-    description: "Crush your to-do list",
-    tiers: [
-      { key: "tasks_10",  icon: "✅", title: "10 Tasks Done",   ring: "#10b981", needed: 10,  unit: "tasks" },
-      { key: "tasks_50",  icon: "⚡", title: "50 Tasks Done",   ring: "#3b82f6", needed: 50,  unit: "tasks" },
-      { key: "tasks_100", icon: "🏆", title: "100 Tasks Done",  ring: "#f59e0b", needed: 100, unit: "tasks" },
-    ],
-    conditionType: "tasks_completed",
-  },
-  {
-    id: "projects",
-    label: "Builder",
-    description: "Ship real things into the world",
-    tiers: [
-      { key: "projects_1",  icon: "🚀", title: "First Ship",        ring: "#6366f1", needed: 1,  unit: "projects" },
-      { key: "projects_5",  icon: "🏗️", title: "Serial Builder",    ring: "#8b5cf6", needed: 5,  unit: "projects" },
-      { key: "projects_10", icon: "🎯", title: "Prolific Creator",  ring: "#ec4899", needed: 10, unit: "projects" },
-    ],
-    conditionType: "projects_done",
-  },
-  {
-    id: "learning",
-    label: "Scholar",
-    description: "Never stop learning",
-    tiers: [
-      { key: "learning_5",  icon: "📚", title: "5 Items Done",   ring: "#06b6d4", needed: 5,  unit: "items" },
-      { key: "learning_20", icon: "🧠", title: "20 Items Done",  ring: "#a855f7", needed: 20, unit: "items" },
-    ],
-    conditionType: "learning_done",
-  },
-  {
-    id: "journal",
-    label: "Reflector",
-    description: "Build a journaling practice",
-    tiers: [
-      { key: "journal_7",  icon: "📖", title: "7-Day Journal",   ring: "#f97316", needed: 7,  unit: "days" },
-      { key: "journal_30", icon: "✍️", title: "30-Day Journal",  ring: "#ef4444", needed: 30, unit: "days" },
-    ],
-    conditionType: "journal_streak",
-  },
-  {
-    id: "knowledge",
-    label: "Archivist",
-    description: "Build your second brain",
-    tiers: [
-      { key: "knowledge_10", icon: "💡", title: "10 Entries",  ring: "#10b981", needed: 10, unit: "entries" },
-    ],
-    conditionType: "knowledge_count",
-  },
-  {
-    id: "budget",
-    label: "Money Mind",
-    description: "Take control of your finances",
-    tiers: [
-      { key: "budget_first", icon: "💰", title: "First Entry",  ring: "#22c55e", needed: 1, unit: "entries" },
-    ],
-    conditionType: "budget_count",
-  },
-  {
-    id: "test",
-    label: "Early Adopter",
-    description: "Just getting started",
-    tiers: [
-      { key: "first_login", icon: "👋", title: "Welcome", ring: "#6366f1", needed: 1, unit: "entries" },
-    ],
-    conditionType: "knowledge_count",
-  },
-];
-
-const TIER_NAMES  = ["Bronze", "Silver", "Gold"];
-const TIER_COLORS = {
-  Bronze:  { text: "text-amber-600",  ring: "#b45309", bg: "bg-amber-900/20",  border: "border-amber-700/30" },
-  Silver:  { text: "text-slate-300",  ring: "#94a3b8", bg: "bg-slate-700/20",  border: "border-slate-500/30" },
-  Gold:    { text: "text-yellow-400", ring: "#facc15", bg: "bg-yellow-900/20", border: "border-yellow-600/30" },
-  Diamond: { text: "text-cyan-300",   ring: "#67e8f9", bg: "bg-cyan-900/20",   border: "border-cyan-500/30"  },
+// ── Rarity system ─────────────────────────────────────────────────────────────
+const RARITY_CONFIG = {
+  common:    { label: "Common",    color: "#94a3b8", glow: "rgba(148,163,184,0.2)", bg: "rgba(148,163,184,0.06)", border: "rgba(148,163,184,0.2)", icon: <Star size={11} />,    textClass: "text-slate-400"  },
+  uncommon:  { label: "Uncommon",  color: "#4ade80", glow: "rgba(74,222,128,0.2)",  bg: "rgba(74,222,128,0.06)",  border: "rgba(74,222,128,0.2)",  icon: <Zap size={11} />,     textClass: "text-green-400"  },
+  rare:      { label: "Rare",      color: "#60a5fa", glow: "rgba(96,165,250,0.25)", bg: "rgba(96,165,250,0.07)",  border: "rgba(96,165,250,0.25)", icon: <Diamond size={11} />, textClass: "text-blue-400"   },
+  epic:      { label: "Epic",      color: "#c084fc", glow: "rgba(192,132,252,0.3)", bg: "rgba(192,132,252,0.08)", border: "rgba(192,132,252,0.3)", icon: <Flame size={11} />,   textClass: "text-purple-400" },
+  legendary: { label: "Legendary", color: "#fb923c", glow: "rgba(251,146,60,0.35)", bg: "rgba(251,146,60,0.08)",  border: "rgba(251,146,60,0.35)", icon: <Crown size={11} />,   textClass: "text-orange-400" },
+  mythic:    { label: "Mythic",    color: "#f472b6", glow: "rgba(244,114,182,0.4)", bg: "rgba(244,114,182,0.08)", border: "rgba(244,114,182,0.4)", icon: <Crown size={11} />,   textClass: "text-pink-400"   },
 };
 
-function getTierName(index) {
-  return TIER_NAMES[index] || "Diamond";
+const RARITY_ORDER = ["mythic", "legendary", "epic", "rare", "uncommon", "common"];
+
+const BADGE_COLORS = {
+  habit_streak_3:   "#86efac", habit_streak_7:   "#fb923c", habit_streak_14: "#f59e0b",
+  habit_streak_21:  "#a78bfa", habit_streak_30:  "#a855f7", habit_streak_60: "#6366f1",
+  habit_streak_100: "#22d3ee", habit_streak_365: "#f472b6",
+  tasks_1:   "#4ade80", tasks_10:  "#10b981", tasks_25: "#3b82f6",
+  tasks_50:  "#60a5fa", tasks_100: "#f59e0b", tasks_250: "#c084fc", tasks_500: "#f472b6",
+  projects_1: "#818cf8", projects_3: "#8b5cf6", projects_5: "#a855f7",
+  projects_10: "#ec4899", projects_20: "#f472b6",
+  learning_1:  "#22d3ee", learning_5:  "#06b6d4", learning_10: "#0ea5e9",
+  learning_20: "#a855f7", learning_50: "#7c3aed", learning_100: "#f472b6",
+  journal_1:  "#fb923c", journal_7:   "#f97316", journal_30:  "#ef4444",
+  journal_100: "#dc2626", journal_365: "#f472b6",
+  knowledge_1:  "#4ade80", knowledge_10: "#10b981", knowledge_25: "#059669",
+  knowledge_50: "#047857", knowledge_100: "#f472b6",
+  budget_first: "#22c55e", budget_10: "#16a34a", budget_50: "#15803d", budget_100: "#14532d",
+  ideas_1:  "#fbbf24", ideas_10: "#f59e0b", ideas_25: "#d97706", ideas_50: "#b45309",
+};
+
+// ── Achievement Card ──────────────────────────────────────────────────────────
+function AchievementCard({ achievement, onClick }) {
+  const r = RARITY_CONFIG[achievement.rarity] || RARITY_CONFIG.common;
+  const badgeColor = BADGE_COLORS[achievement.key] || r.color;
+  const isUnlocked = achievement.unlocked;
+  const isMythic = achievement.rarity === "mythic";
+
+  return (
+    <div
+      onClick={() => isUnlocked && onClick(achievement)}
+      className={clsx(
+        "relative rounded-2xl border overflow-hidden transition-all duration-300 group",
+        isUnlocked
+          ? "cursor-pointer hover:scale-[1.03] hover:-translate-y-0.5"
+          : "opacity-50 cursor-default"
+      )}
+      style={{
+        background: isUnlocked
+          ? `linear-gradient(135deg, #0d1117 0%, #111827 100%)`
+          : "#0d1117",
+        borderColor: isUnlocked ? `${badgeColor}30` : "#1e2535",
+        boxShadow: isUnlocked
+          ? `0 0 0 1px ${badgeColor}15, 0 4px 20px rgba(0,0,0,0.4), 0 0 40px ${r.glow}`
+          : "none",
+      }}
+    >
+      {/* Mythic shimmer */}
+      {isMythic && isUnlocked && (
+        <div
+          className="absolute inset-0 pointer-events-none opacity-30"
+          style={{
+            background: `linear-gradient(135deg, transparent 0%, ${badgeColor}20 50%, transparent 100%)`,
+            animation: "mythicShimmer 3s ease-in-out infinite",
+          }}
+        />
+      )}
+
+      {/* Top color accent line */}
+      {isUnlocked && (
+        <div
+          className="absolute top-0 left-0 right-0 h-px"
+          style={{ background: `linear-gradient(90deg, transparent, ${badgeColor}70, transparent)` }}
+        />
+      )}
+
+      <div className="p-4">
+        {/* Icon + rarity badge */}
+        <div className="flex items-start justify-between mb-3">
+          <div
+            className="h-14 w-14 rounded-xl flex items-center justify-center text-2xl border-2 relative"
+            style={isUnlocked ? {
+              background: `radial-gradient(circle at 35% 35%, ${badgeColor}25, ${badgeColor}06)`,
+              borderColor: `${badgeColor}45`,
+              boxShadow: `0 0 16px ${badgeColor}30, inset 0 1px 0 ${badgeColor}15`,
+            } : {
+              background: "#1e2535",
+              borderColor: "#252d40",
+              filter: "grayscale(1)",
+            }}
+          >
+            {achievement.icon}
+            {isUnlocked && (
+              <div
+                className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full flex items-center justify-center border-2"
+                style={{ background: badgeColor, borderColor: "#0d1117", color: "#0d1117" }}
+              >
+                {r.icon}
+              </div>
+            )}
+            {!isUnlocked && (
+              <div className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-[#1e2535] border border-[#252d40] flex items-center justify-center">
+                <Lock size={9} className="text-slate-600" />
+              </div>
+            )}
+          </div>
+
+          {/* Rarity pill */}
+          <span
+            className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border"
+            style={isUnlocked ? {
+              color: r.color, background: r.bg, borderColor: r.border,
+            } : {
+              color: "#374151", background: "#111827", borderColor: "#1f2937",
+            }}
+          >
+            {r.label}
+          </span>
+        </div>
+
+        {/* Title + description */}
+        <p className={clsx(
+          "font-bold text-sm leading-tight mb-1",
+          isUnlocked ? "text-slate-100" : "text-slate-600"
+        )}>
+          {achievement.title}
+        </p>
+        <p className={clsx(
+          "text-xs leading-relaxed",
+          isUnlocked ? "text-slate-500" : "text-slate-700"
+        )}>
+          {achievement.description}
+        </p>
+
+        {/* Unlock date */}
+        {isUnlocked && achievement.unlockedAt && (
+          <p className="text-[10px] mt-2 font-medium" style={{ color: `${badgeColor}80` }}>
+            ✦ {new Date(achievement.unlockedAt).toLocaleDateString("en-IN", {
+              day: "numeric", month: "short", year: "numeric"
+            })}
+          </p>
+        )}
+      </div>
+
+      {/* Bottom accent */}
+      {isUnlocked && (
+        <div
+          className="h-0.5"
+          style={{
+            background: isMythic
+              ? `linear-gradient(90deg, #f472b6, #a855f7, #22d3ee)`
+              : `linear-gradient(90deg, transparent, ${badgeColor}50, transparent)`,
+          }}
+        />
+      )}
+
+      <style jsx>{`
+        @keyframes mythicShimmer {
+          0%, 100% { transform: translateX(-100%); }
+          50%       { transform: translateX(100%); }
+        }
+      `}</style>
+    </div>
+  );
 }
 
-// ── Badge Detail Modal ────────────────────────────────────────────────────────
-function BadgeModal({ series, achMap, onClose }) {
-  const tiers = series.tiers;
-  const unlockedCount = tiers.filter(t => achMap[t.key]?.unlocked).length;
-  const currentTierIdx = unlockedCount - 1; // highest unlocked
-  const nextTierIdx    = unlockedCount;     // next to unlock
-  const nextTier       = tiers[nextTierIdx];
-  const nextAch        = nextTier ? achMap[nextTier.key] : null;
+// ── Detail Modal ──────────────────────────────────────────────────────────────
+function DetailModal({ achievement, onClose }) {
+  const r = RARITY_CONFIG[achievement.rarity] || RARITY_CONFIG.common;
+  const badgeColor = BADGE_COLORS[achievement.key] || r.color;
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-[9998] bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="pointer-events-auto w-full max-w-md rounded-2xl border overflow-hidden shadow-2xl"
-          style={{ background: "#0f1117", borderColor: "#252d40" }}
+          className="pointer-events-auto w-full max-w-sm rounded-3xl border overflow-hidden shadow-2xl"
+          style={{
+            background: "linear-gradient(135deg, #0a0d14 0%, #111827 100%)",
+            borderColor: `${badgeColor}35`,
+            boxShadow: `0 0 0 1px ${badgeColor}20, 0 32px 80px rgba(0,0,0,0.8), 0 0 80px ${r.glow}`,
+          }}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
-            <div>
-              <p className="font-bold text-slate-100 text-lg">{series.label}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{series.description}</p>
-            </div>
-            <button onClick={onClose} className="p-2 text-slate-500 hover:text-slate-200 rounded-lg hover:bg-white/5">
+          {/* Top shimmer */}
+          <div className="h-px" style={{ background: `linear-gradient(90deg, transparent, ${badgeColor}, transparent)` }} />
+
+          {/* Hero section */}
+          <div className="px-8 pt-8 pb-6 text-center relative">
+            <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-xl text-slate-600 hover:text-slate-300 hover:bg-white/5">
               <X size={16} />
             </button>
+
+            {/* Big icon */}
+            <div className="relative inline-flex mb-4">
+              <div className="absolute inset-0 rounded-3xl animate-pulse opacity-20" style={{ background: badgeColor }} />
+              <div
+                className="relative h-24 w-24 rounded-3xl flex items-center justify-center text-5xl border-2"
+                style={{
+                  background: `radial-gradient(circle at 35% 35%, ${badgeColor}30, ${badgeColor}05)`,
+                  borderColor: `${badgeColor}50`,
+                  boxShadow: `0 0 40px ${badgeColor}40, inset 0 2px 0 ${badgeColor}20`,
+                }}
+              >
+                {achievement.icon}
+              </div>
+              <div
+                className="absolute -top-2 -right-2 h-8 w-8 rounded-full flex items-center justify-center border-2 text-sm"
+                style={{ background: badgeColor, borderColor: "#0a0d14", color: "#0a0d14" }}
+              >
+                {r.icon}
+              </div>
+            </div>
+
+            {/* Rarity pill */}
+            <div className="flex justify-center mb-3">
+              <span
+                className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full border"
+                style={{ color: r.color, background: r.bg, borderColor: r.border }}
+              >
+                {r.label} Achievement
+              </span>
+            </div>
+
+            <h2 className="text-2xl font-black text-white mb-2" style={{ textShadow: `0 0 30px ${badgeColor}40` }}>
+              {achievement.title}
+            </h2>
+            <p className="text-sm text-slate-400 leading-relaxed">{achievement.description}</p>
+
+            {achievement.unlockedAt && (
+              <p className="text-xs mt-4 font-semibold" style={{ color: badgeColor }}>
+                Unlocked on {new Date(achievement.unlockedAt).toLocaleDateString("en-IN", {
+                  weekday: "long", day: "numeric", month: "long", year: "numeric"
+                })}
+              </p>
+            )}
           </div>
 
-          {/* Tier progression */}
-          <div className="px-6 py-5 space-y-4">
-            {tiers.map((tier, i) => {
-              const ach       = achMap[tier.key];
-              const isUnlocked = ach?.unlocked;
-              const tierName  = getTierName(i);
-              const tc        = TIER_COLORS[tierName];
-              const isNext    = i === nextTierIdx;
-
-              return (
-                <div
-                  key={tier.key}
-                  className={clsx(
-                    "rounded-xl border p-4 transition-all",
-                    isUnlocked ? `${tc.bg} ${tc.border}` : "bg-surface-2 border-surface-3",
-                    isNext && !isUnlocked && "border-dashed"
-                  )}
-                >
-                  <div className="flex items-center gap-4">
-                    {/* Icon */}
-                    <div
-                      className={clsx("h-14 w-14 rounded-xl flex items-center justify-center text-2xl border-2 shrink-0 relative")}
-                      style={isUnlocked ? {
-                        background: `linear-gradient(135deg, ${tier.ring}30, ${tier.ring}10)`,
-                        borderColor: `${tier.ring}60`,
-                        boxShadow: `0 0 20px ${tier.ring}40`,
-                      } : {
-                        background: "#1e2535",
-                        borderColor: "#252d40",
-                        filter: "grayscale(1)",
-                        opacity: 0.5,
-                      }}
-                    >
-                      {tier.icon}
-                      {isUnlocked && (
-                        <div className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full flex items-center justify-center"
-                          style={{ background: tier.ring, color: "#0f1117" }}>
-                          <CheckCircle size={12} />
-                        </div>
-                      )}
-                      {!isUnlocked && (
-                        <div className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-3 border border-surface-2 flex items-center justify-center">
-                          <Lock size={9} className="text-slate-600" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={clsx("text-[10px] font-bold uppercase tracking-widest", isUnlocked ? tc.text : "text-slate-600")}>
-                          {tierName}
-                        </span>
-                        {isNext && !isUnlocked && (
-                          <span className="text-[9px] bg-brand/15 text-brand px-1.5 py-0.5 rounded font-semibold">NEXT</span>
-                        )}
-                      </div>
-                      <p className={clsx("font-semibold text-sm", isUnlocked ? "text-slate-100" : "text-slate-500")}>
-                        {tier.title}
-                      </p>
-                      <p className="text-xs text-slate-600 mt-0.5">
-                        Reach {tier.needed} {tier.unit}
-                      </p>
-                      {isUnlocked && ach?.unlockedAt && (
-                        <p className="text-[10px] mt-1" style={{ color: tier.ring }}>
-                          Unlocked {new Date(ach.unlockedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* Bottom bar */}
+          <div
+            className="h-1"
+            style={{
+              background: achievement.rarity === "mythic"
+                ? `linear-gradient(90deg, #f472b6, #a855f7, #22d3ee, #f472b6)`
+                : `linear-gradient(90deg, transparent, ${badgeColor}, transparent)`,
+            }}
+          />
         </div>
       </div>
     </>,
@@ -214,147 +260,80 @@ function BadgeModal({ series, achMap, onClose }) {
   );
 }
 
-// ── Series Card ───────────────────────────────────────────────────────────────
-function SeriesCard({ series, achMap, onClick }) {
-  const tiers          = series.tiers;
-  const unlockedCount  = tiers.filter(t => achMap[t.key]?.unlocked).length;
-  const totalTiers     = tiers.length;
-  const isFullyDone    = unlockedCount === totalTiers;
-  const currentTier    = tiers[unlockedCount - 1]; // highest unlocked tier
-  const nextTier       = tiers[unlockedCount];     // next to unlock
-  const pct            = totalTiers > 0 ? Math.round((unlockedCount / totalTiers) * 100) : 0;
+// ── Page ──────────────────────────────────────────────────────────────────────
+const FILTER_OPTIONS = ["All", "Unlocked", "Locked", ...RARITY_ORDER.map(r => RARITY_CONFIG[r].label)];
+const CATEGORY_LABELS = {
+  tasks: "Tasks", habit_streak: "Habits", projects: "Projects",
+  learning: "Learning", journal: "Journal", knowledge: "Knowledge",
+  budget: "Budget", ideas: "Ideas", first_login: "Getting Started",
+};
 
-  // Show the highest unlocked tier's style, or the first tier's if none
-  const displayTier    = currentTier || tiers[0];
-  const displayTierIdx = currentTier ? unlockedCount - 1 : -1;
-  const tierName       = displayTierIdx >= 0 ? getTierName(displayTierIdx) : null;
-  const tc             = tierName ? TIER_COLORS[tierName] : null;
-  const nextTierName   = nextTier ? getTierName(unlockedCount) : null;
-
-  return (
-    <div
-      onClick={onClick}
-      className={clsx(
-        "relative rounded-2xl border p-5 cursor-pointer transition-all duration-200",
-        "hover:scale-[1.02] hover:shadow-xl group",
-        isFullyDone
-          ? "border-yellow-500/30"
-          : unlockedCount > 0
-          ? "border-surface-2"
-          : "border-surface-2 opacity-75 hover:opacity-100"
-      )}
-      style={isFullyDone ? {
-        background: "linear-gradient(135deg, rgba(234,179,8,0.08) 0%, #161b27 60%)",
-        boxShadow: "0 0 30px rgba(234,179,8,0.1)",
-      } : unlockedCount > 0 ? {
-        background: `linear-gradient(135deg, ${displayTier.ring}08 0%, #161b27 60%)`,
-      } : {
-        background: "#161b27",
-      }}
-    >
-      {/* Fully complete badge */}
-      {isFullyDone && (
-        <div className="absolute top-3 right-3 text-[9px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-900/30 border border-yellow-600/30 px-2 py-0.5 rounded-full">
-          Complete ✦
-        </div>
-      )}
-
-      {/* Top row — icon + tier badge */}
-      <div className="flex items-start gap-3 mb-4">
-        <div className="relative">
-          {/* Tier icons stacked */}
-          <div className="flex -space-x-2">
-            {tiers.map((tier, i) => {
-              const unlocked = achMap[tier.key]?.unlocked;
-              return (
-                <div
-                  key={tier.key}
-                  className="h-12 w-12 rounded-xl flex items-center justify-center text-xl border-2 transition-all"
-                  style={unlocked ? {
-                    background: `linear-gradient(135deg, ${tier.ring}30, ${tier.ring}10)`,
-                    borderColor: `${tier.ring}60`,
-                    boxShadow: `0 0 12px ${tier.ring}40`,
-                    zIndex: i + 1,
-                  } : {
-                    background: "#1e2535",
-                    borderColor: "#252d40",
-                    filter: "grayscale(1)",
-                    opacity: 0.4,
-                    zIndex: i + 1,
-                  }}
-                >
-                  {tier.icon}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div className="flex-1 min-w-0 pt-0.5">
-          <p className="font-bold text-slate-100 text-sm leading-tight">{series.label}</p>
-          <p className="text-xs text-slate-500 mt-0.5 leading-snug">{series.description}</p>
-        </div>
-      </div>
-
-      {/* Current tier */}
-      {tierName && tc && (
-        <div className={clsx("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold mb-3", tc.bg, tc.border, "border", tc.text)}>
-          ◆ {tierName} tier
-        </div>
-      )}
-      {!tierName && (
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold mb-3 bg-surface-3 border border-surface-2 text-slate-600">
-          🔒 Locked
-        </div>
-      )}
-
-      {/* Progress bar across tiers */}
-      <div className="mb-2">
-        <div className="flex justify-between text-[10px] text-slate-600 mb-1.5">
-          <span>{unlockedCount}/{totalTiers} tiers</span>
-          {nextTierName && !isFullyDone && (
-            <span className="text-brand">Next: {nextTierName}</span>
-          )}
-        </div>
-        <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{
-              width: `${pct}%`,
-              background: isFullyDone
-                ? "linear-gradient(90deg, #f59e0b, #facc15)"
-                : unlockedCount > 0
-                ? `linear-gradient(90deg, ${displayTier.ring}, ${nextTier?.ring || displayTier.ring})`
-                : "#6366f1",
-            }}
-          />
-        </div>
-      </div>
-
-      {/* What's needed for next tier */}
-      {nextTier && !isFullyDone && (
-        <p className="text-[10px] text-slate-600 mt-1.5">
-          Reach {nextTier.needed} {nextTier.unit} → {getTierName(unlockedCount)}
-        </p>
-      )}
-
-      {/* Click hint */}
-      <p className="absolute bottom-3 right-3 text-[9px] text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity">
-        View details →
-      </p>
-    </div>
-  );
+function getCategory(key) {
+  if (key.startsWith("tasks")) return "tasks";
+  if (key.startsWith("habit")) return "habit_streak";
+  if (key.startsWith("projects")) return "projects";
+  if (key.startsWith("learning")) return "learning";
+  if (key.startsWith("journal")) return "journal";
+  if (key.startsWith("knowledge")) return "knowledge";
+  if (key.startsWith("budget")) return "budget";
+  if (key.startsWith("ideas")) return "ideas";
+  return "other";
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function AchievementsPage() {
   const { achievements, summary, loading, triggerEvaluation } = useAchievements();
-  const [selectedSeries, setSelectedSeries] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
 
-  const pct    = summary.total > 0 ? Math.round((summary.unlocked / summary.total) * 100) : 0;
-  const achMap = Object.fromEntries(achievements.map((a) => [a.key, a]));
+  const pct = summary.total > 0 ? Math.round((summary.unlocked / summary.total) * 100) : 0;
 
-  const unlockedSeries = SERIES.filter(s => s.tiers.some(t => achMap[t.key]?.unlocked));
-  const lockedSeries   = SERIES.filter(s => !s.tiers.some(t => achMap[t.key]?.unlocked));
+  // Group by category
+  const grouped = useMemo(() => {
+    let list = [...achievements];
+
+    // Apply filter
+    if (filter === "Unlocked") list = list.filter(a => a.unlocked);
+    else if (filter === "Locked") list = list.filter(a => !a.unlocked);
+    else {
+      const rarityMatch = RARITY_ORDER.find(r => RARITY_CONFIG[r].label === filter);
+      if (rarityMatch) list = list.filter(a => a.rarity === rarityMatch);
+    }
+
+    // Apply search
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(a =>
+        a.title.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
+      );
+    }
+
+    // Group by category
+    const groups = {};
+    for (const a of list) {
+      const cat = getCategory(a.key);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(a);
+    }
+
+    // Sort each group: unlocked first, then by rarity desc
+    for (const cat of Object.keys(groups)) {
+      groups[cat].sort((a, b) => {
+        if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1;
+        return RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity);
+      });
+    }
+
+    return groups;
+  }, [achievements, filter, search]);
+
+  // Showcase: highest rarity unlocked
+  const showcase = useMemo(() => {
+    return [...achievements]
+      .filter(a => a.unlocked)
+      .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
+      .slice(0, 4);
+  }, [achievements]);
 
   if (loading) {
     return <PageWrapper className="flex items-center justify-center"><Spinner size="lg" /></PageWrapper>;
@@ -362,79 +341,179 @@ export default function AchievementsPage() {
 
   return (
     <PageWrapper>
-      <div className="max-w-5xl mx-auto space-y-8">
+      <div className="max-w-5xl mx-auto space-y-8 pb-12">
 
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        {/* ── Header ── */}
+        <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <h1 className="page-title">Achievements</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-500/10 border border-yellow-500/20 flex items-center justify-center">
+                <Trophy size={18} className="text-yellow-400" />
+              </div>
+              <h1 className="text-2xl font-black text-slate-100 tracking-tight">Achievements</h1>
+            </div>
+            <p className="text-sm text-slate-500 pl-13">
               {summary.unlocked} of {summary.total} unlocked · {pct}% complete
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={triggerEvaluation}>
+          <button
+            onClick={triggerEvaluation}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-3 text-slate-400 hover:text-slate-200 text-sm transition-colors hover:bg-surface-2 border border-surface-3"
+          >
             <RefreshCw size={14} /> Check Progress
-          </Button>
+          </button>
         </div>
 
-        {/* Overall progress */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between text-sm mb-3">
-            <span className="font-semibold text-slate-200">Overall Progress</span>
-            <span className="font-bold text-brand">{pct}%</span>
+        {/* ── Overall progress bar ── */}
+        <div
+          className="rounded-2xl border p-5 relative overflow-hidden"
+          style={{ background: "#0d1117", borderColor: "#1e2535" }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-bold text-slate-200">Overall Progress</span>
+            <span className="text-lg font-black" style={{
+              background: "linear-gradient(90deg, #6366f1, #a855f7, #22d3ee)",
+              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent"
+            }}>{pct}%</span>
           </div>
-          <div className="h-2.5 bg-surface-3 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-700"
-              style={{ width: `${pct}%`, background: "linear-gradient(90deg, #6366f1, #a855f7, #06b6d4)" }} />
+          <div className="h-3 bg-[#1e2535] rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-1000"
+              style={{
+                width: `${pct}%`,
+                background: "linear-gradient(90deg, #6366f1, #a855f7, #f472b6, #fb923c)",
+                boxShadow: "0 0 12px rgba(168,85,247,0.5)",
+              }}
+            />
           </div>
           <div className="flex justify-between text-xs text-slate-600 mt-2">
             <span>{summary.unlocked} unlocked</span>
             <span>{summary.total - summary.unlocked} remaining</span>
           </div>
+
+          {/* Rarity breakdown */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {RARITY_ORDER.map(rarity => {
+              const count = achievements.filter(a => a.unlocked && a.rarity === rarity).length;
+              const total = achievements.filter(a => a.rarity === rarity).length;
+              const rc = RARITY_CONFIG[rarity];
+              if (total === 0) return null;
+              return (
+                <div
+                  key={rarity}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold"
+                  style={{ color: rc.color, background: rc.bg, borderColor: rc.border }}
+                >
+                  {rc.icon}
+                  <span>{rc.label}</span>
+                  <span style={{ opacity: 0.7 }}>{count}/{total}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Tier legend */}
-        <div className="flex flex-wrap gap-3">
-          {Object.entries(TIER_COLORS).map(([tier, tc]) => (
-            <div key={tier} className={clsx("flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold", tc.bg, tc.border, tc.text)}>
-              ◆ {tier}
+        {/* ── Showcase (top unlocked) ── */}
+        {showcase.length > 0 && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-3">✦ Recent Unlocks</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {showcase.map(a => {
+                const rc = RARITY_CONFIG[a.rarity] || RARITY_CONFIG.common;
+                const bc = BADGE_COLORS[a.key] || rc.color;
+                return (
+                  <div
+                    key={a._id}
+                    onClick={() => setSelected(a)}
+                    className="relative rounded-2xl border p-3 text-center cursor-pointer hover:scale-105 transition-all duration-200 overflow-hidden"
+                    style={{
+                      background: `radial-gradient(circle at 50% 0%, ${bc}12 0%, #0d1117 60%)`,
+                      borderColor: `${bc}30`,
+                      boxShadow: `0 0 24px ${rc.glow}`,
+                    }}
+                  >
+                    <div className="text-3xl mb-1.5">{a.icon}</div>
+                    <p className="text-xs font-bold text-slate-200 leading-tight">{a.title}</p>
+                    <p className="text-[10px] mt-0.5 font-semibold" style={{ color: rc.color }}>{rc.label}</p>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
-
-        {/* Unlocked series */}
-        {unlockedSeries.length > 0 && (
-          <section>
-            <p className="section-title mb-4">In Progress ({unlockedSeries.length})</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {unlockedSeries.map(s => (
-                <SeriesCard key={s.id} series={s} achMap={achMap} onClick={() => setSelectedSeries(s)} />
-              ))}
-            </div>
-          </section>
+          </div>
         )}
 
-        {/* Locked series */}
-        {lockedSeries.length > 0 && (
-          <section>
-            <p className="section-title mb-4">Locked ({lockedSeries.length})</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {lockedSeries.map(s => (
-                <SeriesCard key={s.id} series={s} achMap={achMap} onClick={() => setSelectedSeries(s)} />
-              ))}
-            </div>
-          </section>
+        {/* ── Filters + Search ── */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 bg-[#0d1117] border border-[#1e2535] rounded-xl px-3 py-2">
+            <Search size={14} className="text-slate-600 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search achievements…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="flex-1 bg-transparent text-sm text-slate-300 placeholder-slate-600 outline-none"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {["All", "Unlocked", "Locked"].map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={clsx(
+                  "text-xs px-3 py-1.5 rounded-full font-semibold transition-colors",
+                  filter === f ? "bg-indigo-600 text-white" : "bg-[#1e2535] text-slate-500 hover:text-slate-300"
+                )}
+              >{f}</button>
+            ))}
+            <div className="w-px bg-[#1e2535] mx-1" />
+            {RARITY_ORDER.map(r => {
+              const rc = RARITY_CONFIG[r];
+              const active = filter === rc.label;
+              return (
+                <button
+                  key={r}
+                  onClick={() => setFilter(active ? "All" : rc.label)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold transition-all border"
+                  style={active ? {
+                    background: rc.bg, color: rc.color, borderColor: rc.border,
+                  } : {
+                    background: "transparent", color: "#4b5563", borderColor: "#1e2535",
+                  }}
+                >
+                  {rc.icon} {rc.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Grouped achievement grid ── */}
+        {Object.keys(grouped).length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-4xl mb-3">🔍</p>
+            <p className="text-slate-500">No achievements match your filter.</p>
+          </div>
+        ) : (
+          Object.entries(grouped).map(([cat, items]) => (
+            <section key={cat}>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-3">
+                {CATEGORY_LABELS[cat] || cat}
+                <span className="ml-2 text-slate-700 normal-case font-normal tracking-normal">
+                  {items.filter(a => a.unlocked).length}/{items.length}
+                </span>
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {items.map(a => (
+                  <AchievementCard key={a._id} achievement={a} onClick={setSelected} />
+                ))}
+              </div>
+            </section>
+          ))
         )}
       </div>
 
       {/* Detail modal */}
-      {selectedSeries && (
-        <BadgeModal
-          series={selectedSeries}
-          achMap={achMap}
-          onClose={() => setSelectedSeries(null)}
-        />
-      )}
+      {selected && <DetailModal achievement={selected} onClose={() => setSelected(null)} />}
     </PageWrapper>
   );
 }

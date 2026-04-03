@@ -3,6 +3,7 @@ const Idea = require("../models/Idea");
 const Project = require("../models/Project");
 const { logActivity } = require("../utils/activityLogger");
 const { getPagination } = require("../utils/pagination");
+const { evaluateAchievements } = require("../utils/achievementEngine");
 
 const getIdeas = asyncHandler(async (req, res) => {
   const { skip, limit, getPaginationMeta } = getPagination(req.query);
@@ -45,6 +46,7 @@ const createIdea = asyncHandler(async (req, res) => {
   });
 
   logActivity(req.user._id, "idea_saved", idea._id, idea.title);
+  evaluateAchievements(req.user._id);
   res.status(201).json({ success: true, data: idea });
 });
 
