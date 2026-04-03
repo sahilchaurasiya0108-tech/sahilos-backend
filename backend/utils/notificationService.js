@@ -11,13 +11,11 @@ try {
       process.env.VAPID_PUBLIC_KEY,
       process.env.VAPID_PRIVATE_KEY
     );
-    console.log("✅ web-push VAPID configured");
   } else {
-    console.warn("⚠️  VAPID keys missing — push notifications disabled. Add VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY to .env");
-    webpush = null;
+    webpush = null; // VAPID not configured
   }
 } catch (_) {
-  console.warn("⚠️  web-push not installed — push notifications disabled.");
+  // web-push not installed — push notifications disabled
 }
 
 // ── Core create ────────────────────────────────────────────────────────────────
@@ -34,7 +32,7 @@ async function createNotification({
   actionLink = null,
   scheduledFor = null,
   metadata = {},
-  sendPush = false,
+  sendPush = true,
 }) {
   const notification = await Notification.create({
     userId,
@@ -57,16 +55,10 @@ async function createNotification({
 // ── Web Push ───────────────────────────────────────────────────────────────────
 
 async function sendPushToUser(userId, { title, message, actionLink = "/" }) {
-  if (!webpush) {
-    console.warn("sendPushToUser: webpush not configured, skipping.");
-    return;
-  }
+  if (!webpush) return;
 
   const subs = await PushSubscription.find({ userId });
-  if (!subs.length) {
-    console.warn(`sendPushToUser: no subscriptions found for user ${userId}`);
-    return;
-  }
+  if (!subs.length) return;
 
   const payload = JSON.stringify({
     title,
@@ -84,13 +76,9 @@ async function sendPushToUser(userId, { title, message, actionLink = "/" }) {
   for (let i = 0; i < results.length; i++) {
     if (results[i].status === "rejected") {
       const statusCode = results[i].reason?.statusCode;
-      console.warn(`Push failed for sub ${subs[i]._id}: status=${statusCode}`, results[i].reason?.message);
       if (statusCode === 404 || statusCode === 410) {
         await PushSubscription.findByIdAndDelete(subs[i]._id);
-        console.log(`Removed stale subscription ${subs[i]._id}`);
       }
-    } else {
-      console.log(`✅ Push sent to sub ${subs[i]._id}`);
     }
   }
 }
@@ -109,7 +97,6 @@ async function notifyTaskDueSoon(userId, taskTitle, taskId, hoursLeft) {
     category: "task",
     actionLink: "/tasks",
     metadata: { taskId, hoursLeft },
-    sendPush: true,
   });
 }
 
@@ -122,7 +109,6 @@ async function notifyTaskOverdue(userId, taskTitle, taskId) {
     category: "task",
     actionLink: "/tasks",
     metadata: { taskId },
-    sendPush: true,
   });
 }
 
@@ -135,7 +121,6 @@ async function notifyHabitStreakDanger(userId, habitName, habitId, streak) {
     category: "habit",
     actionLink: "/habits",
     metadata: { habitId, streak },
-    sendPush: true,
   });
 }
 
@@ -148,7 +133,6 @@ async function notifyHabitMilestone(userId, habitName, habitId, streak) {
     category: "habit",
     actionLink: "/habits",
     metadata: { habitId, streak },
-    sendPush: true, // FIX: was false — milestones should push too
   });
 }
 
@@ -161,7 +145,6 @@ async function notifyAchievementUnlocked(userId, achievementName, achievementId)
     category: "achievement",
     actionLink: "/achievements",
     metadata: { achievementId },
-    sendPush: true,
   });
 }
 
@@ -174,7 +157,6 @@ async function notifyBudgetWarning(userId, category, percentUsed) {
     category: "budget",
     actionLink: "/budget",
     metadata: { category, percentUsed },
-    sendPush: true, // FIX: was false — budget warnings should push
   });
 }
 
@@ -188,7 +170,6 @@ async function notifyInactivity(userId, daysInactive) {
     type: "fun",
     category: "fun",
     metadata: { daysInactive },
-    sendPush: true,
   });
 }
 
@@ -200,7 +181,6 @@ async function notifyLearningReminder(userId) {
     type: "info",
     category: "learning",
     actionLink: "/learning",
-    sendPush: true, // FIX: was false
   });
 }
 
@@ -212,7 +192,6 @@ async function notifyJournalReminder(userId) {
     type: "info",
     category: "journal",
     actionLink: "/journal",
-    sendPush: true, // FIX: was false
   });
 }
 

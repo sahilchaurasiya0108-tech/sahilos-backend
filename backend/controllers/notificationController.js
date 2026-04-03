@@ -184,7 +184,6 @@ const sendFunNotification = asyncHandler(async (req, res) => {
   const notification = await createNotification({
     userId: req.user._id,
     ...fun,
-    sendPush: false,
   });
 
   res.status(201).json({ success: true, data: notification });
