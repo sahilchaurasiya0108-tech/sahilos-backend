@@ -25,7 +25,6 @@ const lifeVisionRoutes = require("./routes/lifeVision");
 const dailyStatRoutes = require("./routes/dailyStat");
 const achievementRoutes = require("./routes/achievements");
 const notificationRoutes = require("./routes/notifications");
-const jarvisRoutes = require("./routes/jarvis");
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────────
 dotenv.config();
@@ -79,7 +78,6 @@ app.use("/api/vision", lifeVisionRoutes);
 app.use("/api/daily-stats", dailyStatRoutes);
 app.use("/api/achievements", achievementRoutes);
 app.use("/api/notifications", notificationRoutes);
-app.use("/api/jarvis", jarvisRoutes);
 
 
 // ── 404 handler ────────────────────────────────────────────────────────────────

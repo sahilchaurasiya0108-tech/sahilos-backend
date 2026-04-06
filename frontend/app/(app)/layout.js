@@ -9,7 +9,6 @@ import { Spinner } from "@/components/ui";
 import { AchievementProvider } from "@/hooks/useAchievements";
 import { AchievementPopupQueue } from "@/components/achievements/AchievementPopup";
 import { NotificationProvider } from "@/context/NotificationContext";
-import JarvisButton from "@/components/jarvis/JarvisButton";
 
 
 function AppShell({ children }) {
@@ -34,7 +33,6 @@ function AppShell({ children }) {
           </div>
           {/* Global popup — on top of everything, on every page */}
           <AchievementPopupQueue queue={queue} onDismiss={handleDismiss} />
-          <JarvisButton />
         </div>
       </AchievementProvider>
     </NotificationProvider>
