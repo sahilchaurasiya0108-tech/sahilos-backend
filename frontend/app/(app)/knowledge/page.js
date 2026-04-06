@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Trash2, Edit2, Search, BookOpen, Film, Quote, User, FileText, Hash, X, Filter, ChevronDown, Tv, Star } from "lucide-react";
-import { useKnowledge } from "@/hooks/useKnowledge";
+import { useKnowledge, useKnowledgeCounts } from "@/hooks/useKnowledge";
 import { Button, Badge, Spinner, EmptyState, Input, Select, Textarea } from "@/components/ui";
 import Modal from "@/components/ui/Modal";
 import PageWrapper from "@/components/layout/PageWrapper";
@@ -307,8 +307,8 @@ export default function KnowledgePage() {
   // Reset sub-filters when category changes
   useEffect(() => { setStatusFilter(""); setAuthorFilter(""); }, [activeCategory]);
 
-  // ── Fetch ALL entries (no category filter) just for sidebar counts ──────────
-  const { entries: allEntries } = useKnowledge({});
+  // ── Fetch accurate counts from dedicated endpoint ───────────────────────────
+  const { counts: allCounts, total: allTotal, refetch: refetchCounts } = useKnowledgeCounts();
 
   // ── Fetch filtered entries for the main grid ────────────────────────────────
   const params = {};
@@ -329,10 +329,6 @@ export default function KnowledgePage() {
     return result;
   }, [rawEntries, statusFilter, authorFilter]);
 
-  // Sidebar counts always from ALL entries regardless of current filter
-  const allCounts = useMemo(() =>
-    allEntries.reduce((acc, e) => { acc[e.category] = (acc[e.category] || 0) + 1; return acc; }, {}),
-  [allEntries]);
 
   const openEdit   = (e) => { setViewing(null); setEditing(e); setModal(true); };
   const openCreate = () =>  { setEditing(null); setModal(true); };
@@ -340,12 +336,14 @@ export default function KnowledgePage() {
   const handleSave = async (payload) => {
     if (editing) await updateEntry(editing._id, payload);
     else         await createEntry(payload);
+    refetchCounts();
   };
 
   const handleDelete = async (id) => {
     if (!confirm("Delete this entry?")) return;
     if (viewing?._id === id) setViewing(null);
     await deleteEntry(id);
+    refetchCounts();
   };
 
   const hasSubFilters   = STATUS_OPTIONS[activeCategory];
@@ -374,7 +372,7 @@ export default function KnowledgePage() {
               !activeCategory ? "bg-brand/15 text-brand" : "text-slate-400 hover:bg-surface-2 hover:text-slate-200")}>
             <span>All</span>
             {/* ALWAYS shows total count regardless of filters */}
-            <span className="text-xs opacity-60">{allEntries.length}</span>
+            <span className="text-xs opacity-60">{allTotal}</span>
           </button>
           {CATEGORIES.map(({ value, label, icon: Icon }) => (
             <button key={value} onClick={() => setActiveCategory(value === activeCategory ? "" : value)}
@@ -457,7 +455,7 @@ export default function KnowledgePage() {
             <button onClick={() => setActiveCategory("")}
               className={clsx("shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium",
                 !activeCategory ? "bg-brand/15 text-brand" : "bg-surface-2 text-slate-400")}>
-              All ({allEntries.length})
+              All ({allTotal})
             </button>
             {CATEGORIES.map(({ value, label }) => (
               <button key={value} onClick={() => setActiveCategory(value === activeCategory ? "" : value)}

@@ -4,6 +4,19 @@ const { logActivity } = require("../utils/activityLogger");
 const { getPagination } = require("../utils/pagination");
 const { evaluateAchievements } = require("../utils/achievementEngine");
 
+const getCounts = asyncHandler(async (req, res) => {
+  const base = { userId: req.user._id, isDeleted: false };
+  const [total, grouped] = await Promise.all([
+    Knowledge.countDocuments(base),
+    Knowledge.aggregate([
+      { $match: base },
+      { $group: { _id: "$category", count: { $sum: 1 } } },
+    ]),
+  ]);
+  const counts = grouped.reduce((acc, { _id, count }) => { acc[_id] = count; return acc; }, {});
+  res.json({ success: true, data: { total, counts } });
+});
+
 const getEntries = asyncHandler(async (req, res) => {
   const { skip, limit, getPaginationMeta } = getPagination(req.query);
   const { category, search, tag } = req.query;
@@ -76,4 +89,4 @@ const deleteEntry = asyncHandler(async (req, res) => {
   res.json({ success: true, message: "Entry deleted" });
 });
 
-module.exports = { getEntries, getEntry, createEntry, updateEntry, deleteEntry };
+module.exports = { getCounts, getEntries, getEntry, createEntry, updateEntry, deleteEntry };
