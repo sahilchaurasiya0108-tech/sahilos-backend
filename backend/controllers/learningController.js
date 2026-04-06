@@ -52,12 +52,7 @@ const updateLearningItem = asyncHandler(async (req, res) => {
     if (req.body[f] !== undefined) item[f] = req.body[f];
   });
 
-  // Auto-sync status with progress
-  if (req.body.progress !== undefined) {
-    if (item.progress === 0) item.status = "not-started";
-    else if (item.progress === 100) item.status = "completed";
-    else item.status = "in-progress";
-  }
+  // Status is set explicitly by the client — no auto-override here
 
   await item.save();
 
