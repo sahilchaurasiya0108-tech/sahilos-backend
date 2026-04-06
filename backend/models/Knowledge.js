@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const KNOWLEDGE_CATEGORIES = ["book", "movie", "quote", "person", "article", "other"];
+const KNOWLEDGE_CATEGORIES = ["book", "movie", "web_series", "anime", "quote", "person", "article", "other"];
 
 const knowledgeSchema = new mongoose.Schema(
   {

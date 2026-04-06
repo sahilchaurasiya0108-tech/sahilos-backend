@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Trash2, Edit2, Search, BookOpen, Film, Quote, User, FileText, Hash, X, Filter, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Edit2, Search, BookOpen, Film, Quote, User, FileText, Hash, X, Filter, ChevronDown, Tv, Star } from "lucide-react";
 import { useKnowledge } from "@/hooks/useKnowledge";
 import { Button, Badge, Spinner, EmptyState, Input, Select, Textarea } from "@/components/ui";
 import Modal from "@/components/ui/Modal";
@@ -11,6 +11,8 @@ import clsx from "clsx";
 const CATEGORIES = [
   { value: "book",    label: "Books",    icon: BookOpen, color: "bg-blue-500/15 text-blue-400",      border: "border-blue-500/20" },
   { value: "movie",   label: "Movies",   icon: Film,     color: "bg-pink-500/15 text-pink-400",      border: "border-pink-500/20" },
+  { value: "web_series", label: "Web Series", icon: Tv,    color: "bg-orange-500/15 text-orange-400",  border: "border-orange-500/20" },
+  { value: "anime",   label: "Anime",    icon: Star,     color: "bg-rose-500/15 text-rose-400",       border: "border-rose-500/20" },
   { value: "quote",   label: "Quotes",   icon: Quote,    color: "bg-violet-500/15 text-violet-400",  border: "border-violet-500/20" },
   { value: "person",  label: "People",   icon: User,     color: "bg-emerald-500/15 text-emerald-400",border: "border-emerald-500/20" },
   { value: "article", label: "Articles", icon: FileText, color: "bg-cyan-500/15 text-cyan-400",      border: "border-cyan-500/20" },
@@ -20,7 +22,9 @@ const CATEGORIES = [
 // Status options per category
 const STATUS_OPTIONS = {
   book:    [{ value: "", label: "All" }, { value: "want", label: "Yet to Read" }, { value: "in-progress", label: "Reading" }, { value: "done", label: "Finished" }],
-  movie:   [{ value: "", label: "All" }, { value: "want", label: "Want to Watch" }, { value: "in-progress", label: "Watching" }, { value: "done", label: "Watched" }],
+  movie:      [{ value: "", label: "All" }, { value: "want", label: "Want to Watch" }, { value: "in-progress", label: "Watching" }, { value: "done", label: "Watched" }],
+  web_series: [{ value: "", label: "All" }, { value: "want", label: "Want to Watch" }, { value: "in-progress", label: "Watching" }, { value: "done", label: "Finished" }],
+  anime:      [{ value: "", label: "All" }, { value: "want", label: "Plan to Watch" }, { value: "in-progress", label: "Watching" }, { value: "done", label: "Completed" }],
   article: [{ value: "", label: "All" }, { value: "want", label: "Want to Read" }, { value: "in-progress", label: "Reading" }, { value: "done", label: "Finished" }],
 };
 
@@ -84,6 +88,34 @@ function ExtraFields({ category, form, setForm }) {
         <StarRating value={form.rating} onChange={(v) => setForm((f) => ({ ...f, rating: v }))} />
         <Textarea label="Review / Thoughts" value={form.content || ""} onChange={set("content")} rows={4} placeholder="What did you think? What stuck with you?" />
         <Input label="Genre / Tags" value={form.tags || ""} onChange={set("tags")} placeholder="thriller, sci-fi, bollywood, must-watch" />
+      </>);
+    case "web_series":
+      return (<>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Creator / Network" value={form.author || ""} onChange={set("author")} placeholder="e.g. Netflix, HBO, Creator" />
+          <Select label="Status" value={form.status || "want"} onChange={set("status")}>
+            <option value="want">Want to Watch</option>
+            <option value="in-progress">Watching</option>
+            <option value="done">Finished</option>
+          </Select>
+        </div>
+        <StarRating value={form.rating} onChange={(v) => setForm((f) => ({ ...f, rating: v }))} />
+        <Textarea label="Review / Thoughts" value={form.content || ""} onChange={set("content")} rows={4} placeholder="What did you think? Favourite moments, characters…" />
+        <Input label="Genre / Tags" value={form.tags || ""} onChange={set("tags")} placeholder="thriller, drama, sci-fi, binge-worthy" />
+      </>);
+    case "anime":
+      return (<>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Studio / Author" value={form.author || ""} onChange={set("author")} placeholder="e.g. MAPPA, Ghibli, Mangaka" />
+          <Select label="Status" value={form.status || "want"} onChange={set("status")}>
+            <option value="want">Plan to Watch</option>
+            <option value="in-progress">Watching</option>
+            <option value="done">Completed</option>
+          </Select>
+        </div>
+        <StarRating value={form.rating} onChange={(v) => setForm((f) => ({ ...f, rating: v }))} />
+        <Textarea label="Review / Thoughts" value={form.content || ""} onChange={set("content")} rows={4} placeholder="What did you love? Arcs, characters, animation…" />
+        <Input label="Genre / Tags" value={form.tags || ""} onChange={set("tags")} placeholder="shonen, isekai, slice-of-life, must-watch" />
       </>);
     case "quote":
       return (<>
@@ -154,7 +186,7 @@ function EntryModal({ open, onClose, onSave, initial }) {
     } finally { setSaving(false); }
   };
 
-  const titlePlaceholders = { book: "Book title…", movie: "Movie title…", quote: "Short label for this quote…", person: "Person's name…", article: "Article title…", other: "Title / Name…" };
+  const titlePlaceholders = { book: "Book title…", movie: "Movie title…", web_series: "Series title…", anime: "Anime title…", quote: "Short label for this quote…", person: "Person's name…", article: "Article title…", other: "Title / Name…" };
 
   return (
     <Modal open={open} onClose={onClose} title={initial ? "Edit Entry" : "New Entry"} size="lg">
@@ -322,6 +354,10 @@ export default function KnowledgePage() {
   // Label for author/director filter based on active category
   const authorFilterLabel = activeCategory === "movie"
     ? "Filter by director…"
+    : activeCategory === "web_series"
+    ? "Filter by creator / network…"
+    : activeCategory === "anime"
+    ? "Filter by studio / author…"
     : activeCategory === "book"
     ? "Filter by author…"
     : "Filter by author / tag…";
