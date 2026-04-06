@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Plus, Trash2, Edit2, Search, BookOpen, Film, Quote, User, FileText, Hash, X, Filter, ChevronDown, Tv, Star } from "lucide-react";
 import { useKnowledge, useKnowledgeCounts } from "@/hooks/useKnowledge";
 import { Button, Badge, Spinner, EmptyState, Input, Select, Textarea } from "@/components/ui";
@@ -311,12 +311,17 @@ export default function KnowledgePage() {
   const { counts: allCounts, total: allTotal, refetch: refetchCounts } = useKnowledgeCounts();
 
   // ── Fetch filtered entries for the main grid ────────────────────────────────
-  const params = {};
-  if (activeCategory) params.category = activeCategory;
-  if (search)         params.search   = search;
+  // Memoized so the object reference only changes when filters actually change,
+  // preventing spurious resets in useKnowledge when unrelated state updates occur.
+  const params = useMemo(() => {
+    const p = {};
+    if (activeCategory) p.category = activeCategory;
+    if (search)         p.search   = search;
+    return p;
+  }, [activeCategory, search]);
   // status and author are client-side filtered (fast, avoids extra API calls)
 
-  const { entries: rawEntries, loading, hasMore, loadMore, createEntry, updateEntry, deleteEntry } = useKnowledge(params);
+  const { entries: rawEntries, loading, loadingMore, hasMore, loadMore, createEntry, updateEntry, deleteEntry } = useKnowledge(params);
 
   // Client-side sub-filters (status, author) applied on top of server results
   const entries = useMemo(() => {
@@ -486,7 +491,7 @@ export default function KnowledgePage() {
               </div>
               {hasMore && (
                 <div className="flex justify-center pt-2">
-                  <Button variant="outline" onClick={loadMore}>Load More</Button>
+                  <Button variant="outline" onClick={loadMore} disabled={loadingMore}>{loadingMore ? <><Spinner size="sm" />Loading…</> : "Load More"}</Button>
                 </div>
               )}
             </>

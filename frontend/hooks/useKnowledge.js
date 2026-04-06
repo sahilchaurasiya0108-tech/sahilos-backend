@@ -1,66 +1,52 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 
 export function useKnowledge(params = {}) {
-  // Stable string key — only changes when filters actually change
-  const paramsKey = JSON.stringify(params);
-
   const [entries, setEntries]       = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading]       = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage]             = useState(1);
 
-  // Keep a ref to the latest paramsKey so loadMore can always read current filters
-  const paramsKeyRef = useRef(paramsKey);
-  paramsKeyRef.current = paramsKey;
+  // Single fetch function — mirrors the activity page pattern.
+  // `p`      = which page to fetch
+  // `append` = true for load-more (append), false for a fresh filter fetch (replace)
+  const fetchEntries = useCallback(async (p = 1, append = false, overrideParams) => {
+    const activeParams = overrideParams ?? params;
+    try {
+      append ? setLoadingMore(true) : setLoading(true);
 
-  // Reset to page 1 and refetch when filters change
+      const q = new URLSearchParams();
+      Object.entries(activeParams).forEach(([k, v]) => { if (v) q.set(k, v); });
+      q.set("limit", "24");
+      q.set("page", String(p));
+
+      const res = await api.get(`/knowledge?${q.toString()}`);
+      setEntries((prev) => append ? [...prev, ...res.data.data] : res.data.data);
+      setPagination(res.data.pagination);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(params)]);
+
+  // Reset and refetch from page 1 whenever filters change
   useEffect(() => {
     setPage(1);
     setEntries([]);
-
-    const q = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
-    q.set("limit", "24");
-    q.set("page", "1");
-
-    let cancelled = false;
-    setLoading(true);
-    api.get(`/knowledge?${q.toString()}`)
-      .then((res) => {
-        if (cancelled) return;
-        setEntries(res.data.data);
-        setPagination(res.data.pagination);
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
+    fetchEntries(1, false, params);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramsKey]);
+  }, [fetchEntries]);
 
-  // loadMore appends the next page — never resets the list
+  // Load next page and APPEND — never resets the list
   const loadMore = useCallback(() => {
-    setPage((prev) => {
-      const next = prev + 1;
-
-      const q = new URLSearchParams();
-      Object.entries(JSON.parse(paramsKeyRef.current)).forEach(([k, v]) => { if (v) q.set(k, v); });
-      q.set("limit", "24");
-      q.set("page", String(next));
-
-      setLoading(true);
-      api.get(`/knowledge?${q.toString()}`)
-        .then((res) => {
-          setEntries((e) => [...e, ...res.data.data]);
-          setPagination(res.data.pagination);
-        })
-        .finally(() => setLoading(false));
-
-      return next;
-    });
-  }, []);
+    const next = page + 1;
+    setPage(next);
+    fetchEntries(next, true);
+  }, [page, fetchEntries]);
 
   const createEntry = useCallback(async (payload) => {
     const res = await api.post("/knowledge", payload);
@@ -83,7 +69,7 @@ export function useKnowledge(params = {}) {
   }, []);
 
   return {
-    entries, pagination, loading,
+    entries, pagination, loading, loadingMore,
     loadMore, createEntry, updateEntry, deleteEntry,
     hasMore: pagination?.hasNext ?? false,
   };
