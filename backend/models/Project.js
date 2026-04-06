@@ -65,6 +65,14 @@ const projectSchema = new mongoose.Schema(
       type: String,
       default: "#6366f1", // indigo-500
     },
+    categories: {
+      type: [String],
+      enum: {
+        values: ["personal", "freelance", "office", "learning", "experiment"],
+        message: "Invalid category value",
+      },
+      default: [],
+    },
     // ── Soft delete ──────────────────────────────────────────────────────────
     isDeleted: {
       type: Boolean,

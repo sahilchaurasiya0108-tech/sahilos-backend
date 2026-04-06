@@ -25,6 +25,14 @@ export const PROJECT_COLORS = [
   "#f59e0b", "#10b981", "#3b82f6", "#14b8a6",
 ];
 
+export const PROJECT_CATEGORIES = [
+  { value: "personal",    label: "Personal",    icon: "👤", color: "bg-violet-500/20 text-violet-300" },
+  { value: "freelance",   label: "Freelance",   icon: "💼", color: "bg-amber-500/20 text-amber-300" },
+  { value: "office",      label: "Office",      icon: "🏢", color: "bg-blue-500/20 text-blue-300" },
+  { value: "learning",    label: "Learning",    icon: "🌱", color: "bg-emerald-500/20 text-emerald-300" },
+  { value: "experiment",  label: "Experiment",  icon: "🧪", color: "bg-cyan-500/20 text-cyan-300" },
+];
+
 // ── Job ───────────────────────────────────────────────────────────────────────
 export const JOB_STAGES = [
   { value: "saved",     label: "Saved",     color: "bg-slate-500/20 text-slate-400" },

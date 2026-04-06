@@ -10,7 +10,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { Button, Badge, ProgressBar, Spinner, EmptyState, Input, Select, Textarea } from "@/components/ui";
 import Modal from "@/components/ui/Modal";
 import PageWrapper from "@/components/layout/PageWrapper";
-import { PROJECT_STATUSES, PROJECT_COLORS } from "@/lib/constants";
+import { PROJECT_STATUSES, PROJECT_COLORS, PROJECT_CATEGORIES } from "@/lib/constants";
 import api from "@/lib/api";
 import clsx from "clsx";
 
@@ -21,6 +21,7 @@ function ProjectModal({ open, onClose, onSave, initial }) {
   const blank = {
     title: "", description: "", status: "active",
     repoLink: "", liveUrl: "", notes: "", color: PROJECT_COLORS[0], milestones: [],
+    categories: [],
   };
   const [form, setForm]     = useState(blank);
   const [msInput, setMs]    = useState("");
@@ -66,6 +67,36 @@ function ProjectModal({ open, onClose, onSave, initial }) {
                   form.color === c ? "border-white scale-110" : "border-transparent")}
                 style={{ background: c }} />
             ))}
+          </div>
+        </div>
+
+        {/* Categories multi-select */}
+        <div>
+          <p className="text-xs font-medium text-slate-400 mb-2">Categories <span className="text-slate-600">(pick one or more)</span></p>
+          <div className="flex gap-2 flex-wrap">
+            {PROJECT_CATEGORIES.map((cat) => {
+              const selected = form.categories?.includes(cat.value);
+              return (
+                <button
+                  key={cat.value}
+                  type="button"
+                  onClick={() => setForm((f) => ({
+                    ...f,
+                    categories: selected
+                      ? f.categories.filter((c) => c !== cat.value)
+                      : [...(f.categories || []), cat.value],
+                  }))}
+                  className={clsx(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                    selected
+                      ? `${cat.color} border-current`
+                      : "bg-surface-2 text-slate-500 border-white/10 hover:border-white/20"
+                  )}
+                >
+                  <span>{cat.icon}</span>{cat.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -227,6 +258,23 @@ function ProjectDrawer({ projectId, projectColor, onClose, onEdit, onDelete, onM
               </div>
             </div>
 
+            {/* Categories */}
+            {project.categories?.length > 0 && (
+              <section>
+                <SectionLabel>Categories</SectionLabel>
+                <div className="flex gap-2 flex-wrap">
+                  {project.categories.map((cat) => {
+                    const meta = PROJECT_CATEGORIES.find((c) => c.value === cat);
+                    return meta ? (
+                      <span key={cat} className={clsx("inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium", meta.color)}>
+                        {meta.icon} {meta.label}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              </section>
+            )}
+
             {/* Description */}
             {project.description && (
               <section>
@@ -362,6 +410,14 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
 
       <div className="flex items-center gap-2 flex-wrap">
         {status && <Badge className={status.color}>{status.label}</Badge>}
+        {project.categories?.map((cat) => {
+          const meta = PROJECT_CATEGORIES.find((c) => c.value === cat);
+          return meta ? (
+            <span key={cat} className={clsx("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium", meta.color)}>
+              {meta.icon} {meta.label}
+            </span>
+          ) : null;
+        })}
         {project.repoLink && (
           <a href={project.repoLink} target="_blank" rel="noopener noreferrer"
             className="text-xs text-slate-500 hover:text-brand flex items-center gap-1"
@@ -414,6 +470,7 @@ export default function ProjectsPage() {
   const [editing, setEditing]     = useState(null);
   const [viewingId, setViewingId] = useState(null);
   const [viewingColor, setViewingColor] = useState(null);
+  const [activeCategory, setActiveCategory] = useState(null);
 
   const { projects, loading, createProject, updateProject, toggleMilestone, deleteProject } = useProjects();
 
@@ -432,25 +489,58 @@ export default function ProjectsPage() {
     await deleteProject(id);
   };
 
+  const filteredProjects = activeCategory
+    ? projects.filter((p) => p.categories?.includes(activeCategory))
+    : projects;
+
   return (
     <PageWrapper>
       <div className="max-w-6xl mx-auto space-y-5">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="page-title">Projects</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{filteredProjects.length} project{filteredProjects.length !== 1 ? "s" : ""}</p>
           </div>
           <Button variant="primary" onClick={openCreate}><Plus size={15} /> New Project</Button>
         </div>
 
+        {/* Category filter tabs */}
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setActiveCategory(null)}
+            className={clsx(
+              "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+              activeCategory === null
+                ? "bg-white/10 text-slate-200 border-white/20"
+                : "bg-transparent text-slate-500 border-white/10 hover:border-white/20"
+            )}
+          >
+            All
+          </button>
+          {PROJECT_CATEGORIES.map((cat) => (
+            <button
+              key={cat.value}
+              onClick={() => setActiveCategory(activeCategory === cat.value ? null : cat.value)}
+              className={clsx(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                activeCategory === cat.value
+                  ? `${cat.color} border-current`
+                  : "bg-transparent text-slate-500 border-white/10 hover:border-white/20"
+              )}
+            >
+              {cat.icon} {cat.label}
+            </button>
+          ))}
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-20"><Spinner size="lg" /></div>
-        ) : projects.length === 0 ? (
-          <EmptyState icon={FolderOpen} title="No projects yet" description="Start building something great."
+        ) : filteredProjects.length === 0 ? (
+          <EmptyState icon={FolderOpen} title="No projects here" description={activeCategory ? "No projects in this category yet." : "Start building something great."}
             action={<Button variant="primary" onClick={openCreate}><Plus size={15} />New Project</Button>} />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {projects.map((p) => (
+            {filteredProjects.map((p) => (
               <ProjectCard key={p._id} project={p} onView={openView}
                 onEdit={openEdit} onDelete={handleDelete} onMilestoneToggle={toggleMilestone} />
             ))}

@@ -27,6 +27,7 @@ const getProjects = asyncHandler(async (req, res) => {
   const filter = { userId: req.user._id, isDeleted: false };
   if (status) filter.status = status;
   if (search) filter.title = { $regex: search, $options: "i" };
+  if (req.query.category) filter.categories = req.query.category;
 
   const [projects, total] = await Promise.all([
     Project.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
@@ -82,7 +83,7 @@ const getProject = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const createProject = asyncHandler(async (req, res) => {
-  const { title, description, status, repoLink, liveUrl, milestones, notes, color } = req.body;
+  const { title, description, status, repoLink, liveUrl, milestones, notes, color, categories } = req.body;
 
   if (!title) {
     res.statusCode = 400;
@@ -94,6 +95,7 @@ const createProject = asyncHandler(async (req, res) => {
     title, description, status, repoLink, liveUrl,
     milestones: milestones || [],
     notes, color,
+    categories: categories || [],
     progress: recalcProgress(milestones),
   });
 
@@ -121,7 +123,7 @@ const updateProject = asyncHandler(async (req, res) => {
 
   const allowedFields = [
     "title", "description", "status", "repoLink", "liveUrl",
-    "milestones", "notes", "color",
+    "milestones", "notes", "color", "categories",
   ];
 
   allowedFields.forEach((field) => {
