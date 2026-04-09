@@ -8,6 +8,7 @@ const LearningItem = require("../models/LearningItem");
 const { logActivity } = require("../utils/activityLogger");
 const { evaluateAchievements } = require("../utils/achievementEngine");
 const { getPagination } = require("../utils/pagination");
+const { todayIST, toISTDateStr } = require("../utils/istUtils");
 
 // ── Existing endpoints (unchanged) ────────────────────────────────────────────
 
@@ -243,7 +244,7 @@ const getWritingStreak = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: { streak: 0, totalEntries: 0 } });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   const dates  = entries.map((e) => e.date);
 
   let streak = 0;
@@ -277,8 +278,7 @@ const getWritingStreak = asyncHandler(async (req, res) => {
 const getMoodTrend = asyncHandler(async (req, res) => {
   const days = [];
   for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+    const d = new Date(Date.now() + (5.5 * 60 * 60 * 1000) - i * 86400000);
     days.push(d.toISOString().slice(0, 10));
   }
 

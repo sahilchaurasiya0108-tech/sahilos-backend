@@ -12,10 +12,13 @@ const {
   normaliseDate,
 } = require("../utils/streakCalculator");
 
-// Helper: midnight UTC Date from a date string or today
+const { midnightISTtoUTC, todayIST } = require("../utils/istUtils");
+
+// Helper: midnight IST Date from a YYYY-MM-DD string or today in IST
+// Stores as UTC equivalent of midnight IST (i.e. 18:30 UTC prev day)
 const toMidnightUTC = (dateStr) => {
-  const d = dateStr ? new Date(dateStr) : new Date();
-  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const str = dateStr || todayIST();
+  return midnightISTtoUTC(str);
 };
 
 /**

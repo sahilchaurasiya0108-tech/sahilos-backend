@@ -12,6 +12,7 @@ try {
   console.warn("⚠️  node-cron not installed — scheduled notifications disabled. Run: npm install node-cron");
 }
 
+const { todayIST } = require("./istUtils");
 const User = require("../models/User");
 const Task = require("../models/Task");
 const Habit = require("../models/Habit");
@@ -98,7 +99,7 @@ async function checkOverdueTasks() {
 async function checkHabitStreaks() {
   try {
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = todayIST();
 
     const habits = await Habit.find({ isActive: true }).lean();
 
@@ -207,7 +208,7 @@ async function sendWeeklySummary() {
 async function sendJournalReminder() {
   try {
     const userIds = await getAllUserIds();
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayIST();
 
     for (const userId of userIds) {
       // Skip if they already journaled today (optional check)

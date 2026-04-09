@@ -2,17 +2,23 @@
  * streakCalculator
  * Pure utility functions for habit streak logic.
  * Works with arrays of Date objects (completedDate from HabitLog).
+ *
+ * All "today" / "yesterday" boundaries use IST (UTC+5:30) so that
+ * users marking habits after 11 PM IST are credited to the correct
+ * IST calendar date, not the UTC date (which may already be tomorrow).
  */
+
+const { IST_OFFSET_MS } = require("./istUtils");
 
 /**
  * normaliseDate
- * Strips time component — returns midnight UTC string for comparison.
+ * Returns the IST calendar date of a timestamp as a "YYYY-MM-DD" string.
+ * 11:40 PM IST on April 8 → "2026-04-08" (not April 9 UTC).
  */
 const normaliseDate = (date) => {
-  const d = new Date(date);
-  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
-    .toISOString()
-    .slice(0, 10);
+  // Shift the timestamp into IST before slicing the date string
+  const shifted = new Date(new Date(date).getTime() + IST_OFFSET_MS);
+  return shifted.toISOString().slice(0, 10);
 };
 
 /**
@@ -30,10 +36,9 @@ const calculateCurrentStreak = (completedDates) => {
     ...new Set(completedDates.map(normaliseDate)),
   ].sort((a, b) => (a > b ? -1 : 1));
 
-  const todayStr = normaliseDate(new Date());
-  const yesterdayStr = normaliseDate(
-    new Date(Date.now() - 24 * 60 * 60 * 1000)
-  );
+  // Today and yesterday in IST — critical for users active after 11 PM IST
+  const todayStr     = new Date(Date.now() + IST_OFFSET_MS).toISOString().slice(0, 10);
+  const yesterdayStr = new Date(Date.now() + IST_OFFSET_MS - 86400000).toISOString().slice(0, 10);
 
   // Streak must include today or yesterday to be active
   if (unique[0] !== todayStr && unique[0] !== yesterdayStr) return 0;

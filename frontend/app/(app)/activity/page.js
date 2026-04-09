@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { format } from "date-fns";
+import { toISTDateStr, formatTimeIST, formatDayLabelIST } from "@/lib/istDate";
 import {
   CheckSquare, CheckCircle, Zap, FolderPlus, Folder,
   Briefcase, ArrowRight, Lightbulb, BookOpen, GraduationCap, Activity,
@@ -44,9 +44,10 @@ export default function ActivityPage() {
     fetchActivity(next, true);
   };
 
-  // Group activities by date
+  // Group activities by IST calendar date — not UTC date
+  // Without this, an 11:40 PM IST action groups under "tomorrow" (UTC date)
   const grouped = activities.reduce((acc, a) => {
-    const day = format(new Date(a.createdAt), "yyyy-MM-dd");
+    const day = toISTDateStr(a.createdAt);
     if (!acc[day]) acc[day] = [];
     acc[day].push(a);
     return acc;
@@ -72,7 +73,7 @@ export default function ActivityPage() {
             {Object.entries(grouped).map(([day, acts]) => (
               <div key={day}>
                 <p className="section-title mb-4">
-                  {format(new Date(day), "EEEE, MMMM d")}
+                  {formatDayLabelIST(day)}
                 </p>
                 <div className="relative space-y-1 pl-5">
                   {/* Timeline line */}
@@ -98,9 +99,9 @@ export default function ActivityPage() {
                           <div className="flex items-center gap-2 mt-0.5">
                             <p className="text-xs text-slate-600">{meta?.label}</p>
                             <span className="text-slate-700">·</span>
-                            <p className="text-xs text-slate-600">{format(new Date(a.createdAt), "h:mm a")}</p>
+                            <p className="text-xs text-slate-600">{formatTimeIST(a.createdAt)}</p>
                           </div>
-                          {/* Meta extras (stage changes, streak, mood) */}
+                          {/* Meta extras */}
                           {a.meta?.from && a.meta?.to && (
                             <p className="text-xs text-slate-600 mt-0.5">
                               {a.meta.from} → {a.meta.to}
