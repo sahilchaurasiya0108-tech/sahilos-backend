@@ -3,6 +3,10 @@ import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 
+// Fires a custom event so useDashboard (on dashboard page) silently refetches
+const invalidateDashboard = () =>
+  window.dispatchEvent(new Event("dashboard:invalidate"));
+
 // ── useProjects ───────────────────────────────────────────────────────────────
 export function useProjects(params = {}) {
   const [projects, setProjects] = useState([]);
@@ -105,12 +109,14 @@ export function useHabits() {
   const logToday = useCallback(async (id) => {
     const res = await api.post(`/habits/${id}/log`, { localDate });
     await fetchHabits();
+    invalidateDashboard(); // tell dashboard to refresh
     return res.data.data;
   }, [fetchHabits, localDate]);
 
   const unlogToday = useCallback(async (id) => {
     await api.delete(`/habits/${id}/log`, { data: { localDate } });
     await fetchHabits();
+    invalidateDashboard(); // tell dashboard to refresh
   }, [fetchHabits, localDate]);
 
   const deleteHabit = useCallback(async (id) => {

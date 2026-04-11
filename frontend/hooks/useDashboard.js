@@ -41,5 +41,12 @@ export function useDashboard() {
     return () => window.removeEventListener("focus", onFocus);
   }, [fetch]);
 
+  // Refetch when any mutation (habit toggle, task complete, etc.) fires this event
+  useEffect(() => {
+    const onInvalidate = () => fetch(true);
+    window.addEventListener("dashboard:invalidate", onInvalidate);
+    return () => window.removeEventListener("dashboard:invalidate", onInvalidate);
+  }, [fetch]);
+
   return { data, loading, error, refetch: fetch };
 }

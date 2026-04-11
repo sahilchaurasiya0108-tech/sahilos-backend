@@ -36,7 +36,10 @@ const setCache = (userId, dateStr, data) => {
  * (Optional: cache TTL alone is sufficient for 30s freshness guarantee.)
  */
 const invalidateDashboardCache = (userId) => {
-  dashboardCache.delete(String(userId));
+  const prefix = String(userId) + ":";
+  for (const key of dashboardCache.keys()) {
+    if (key.startsWith(prefix)) dashboardCache.delete(key);
+  }
 };
 
 // ── Controller ─────────────────────────────────────────────────────────────────
@@ -60,20 +63,20 @@ const getDashboard = asyncHandler(async (req, res) => {
     return res.json({ success: true, cached: true, data: cached });
   }
 
-  // ── Use client's local date if provided, otherwise fall back to server UTC ──
-  let todayMidnight, tomorrowMidnight;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(localDateStr)) {
+  // ── Compute today's window using IST midnight boundaries ──────────────────
+  // completedDate is stored as midnight IST (= 18:30 UTC previous day) by habitController.
+  // The query window must use the same IST midnight boundaries, not UTC midnight.
+  const { midnightISTtoUTC } = require("../utils/istUtils");
+  const todayMidnight    = midnightISTtoUTC(localDateStr);
+  const tomorrowDateStr  = (() => {
     const [y, m, d] = localDateStr.split("-").map(Number);
-    todayMidnight    = new Date(Date.UTC(y, m - 1, d));
-    tomorrowMidnight = new Date(Date.UTC(y, m - 1, d + 1));
-  } else {
-    todayMidnight = new Date();
-    todayMidnight.setHours(0, 0, 0, 0);
-    tomorrowMidnight = new Date(todayMidnight);
-    tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1);
-  }
+    const next = new Date(Date.UTC(y, m - 1, d + 1));
+    return next.toISOString().slice(0, 10);
+  })();
+  const tomorrowMidnight = midnightISTtoUTC(tomorrowDateStr);
 
-  const startOfMonth = new Date(Date.UTC(todayMidnight.getUTCFullYear(), todayMidnight.getUTCMonth(), 1));
+  const [_y, _m] = localDateStr.split("-").map(Number);
+  const startOfMonth = midnightISTtoUTC(`${_y}-${String(_m).padStart(2, "0")}-01`);
 
   const [
     focusTasks,
