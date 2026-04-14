@@ -13,7 +13,7 @@ import PageWrapper from "@/components/layout/PageWrapper";
 import { PROJECT_STATUSES, PROJECT_COLORS, PROJECT_CATEGORIES } from "@/lib/constants";
 import api from "@/lib/api";
 import clsx from "clsx";
-import NooriCard from "@/components/projects/NooriCard";
+import NooriCard, { NooriDrawer } from "@/components/projects/NooriCard";
 
 const statusMeta = (value) => PROJECT_STATUSES.find((s) => s.value === value);
 
@@ -484,13 +484,14 @@ export default function ProjectsPage() {
   const [editing, setEditing]     = useState(null);
   const [viewingId, setViewingId] = useState(null);
   const [viewingColor, setViewingColor] = useState(null);
+  const [viewingIsNoori, setViewingIsNoori] = useState(false);
   const [activeCategory, setActiveCategory] = useState(null);
 
   const { projects, loading, createProject, updateProject, toggleMilestone, deleteProject } = useProjects();
 
   const openEdit   = (p) => { setEditing(p); setModal(true); };
   const openCreate = () =>  { setEditing(null); setModal(true); };
-  const openView   = (p) => { setViewingId(p._id); setViewingColor(p.color); };
+  const openView   = (p) => { setViewingId(p._id); setViewingColor(p.color); setViewingIsNoori(p.title?.toLowerCase().startsWith("noori") || false); };
 
   const handleSave = async (payload) => {
     if (editing) await updateProject(editing._id, payload);
@@ -564,14 +565,22 @@ export default function ProjectsPage() {
 
       {/* FIX: Drawer fetches single project by ID — gets real taskStats */}
       {viewingId && (
-        <ProjectDrawer
-          projectId={viewingId}
-          projectColor={viewingColor}
-          onClose={() => setViewingId(null)}
-          onEdit={openEdit}
-          onDelete={handleDelete}
-          onMilestoneToggle={toggleMilestone}
-        />
+        viewingIsNoori
+          ? <NooriDrawer
+              projectId={viewingId}
+              onClose={() => setViewingId(null)}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              onMilestoneToggle={toggleMilestone}
+            />
+          : <ProjectDrawer
+              projectId={viewingId}
+              projectColor={viewingColor}
+              onClose={() => setViewingId(null)}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              onMilestoneToggle={toggleMilestone}
+            />
       )}
 
       <ProjectModal open={modalOpen} onClose={() => setModal(false)} onSave={handleSave} initial={editing} />
