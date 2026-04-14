@@ -13,6 +13,7 @@ import PageWrapper from "@/components/layout/PageWrapper";
 import { PROJECT_STATUSES, PROJECT_COLORS, PROJECT_CATEGORIES } from "@/lib/constants";
 import api from "@/lib/api";
 import clsx from "clsx";
+import NooriCard from "@/components/projects/NooriCard";
 
 const statusMeta = (value) => PROJECT_STATUSES.find((s) => s.value === value);
 
@@ -386,6 +387,19 @@ function SectionLabel({ children, className = "mb-2" }) {
 
 // ── Project Card ──────────────────────────────────────────────────────────────
 function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
+  // 🌙 Special treatment for Noori
+  if (project.title?.toLowerCase().startsWith("noori")) {
+    return (
+      <NooriCard
+        project={project}
+        onView={onView}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onMilestoneToggle={onMilestoneToggle}
+      />
+    );
+  }
+
   const status = statusMeta(project.status);
   const done   = project.milestones?.filter((m) => m.done).length || 0;
 
