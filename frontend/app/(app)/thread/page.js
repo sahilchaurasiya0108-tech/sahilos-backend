@@ -38,6 +38,37 @@ function randomFrom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ─── useViewportHeight — tracks real visual viewport (keyboard-aware) ─────────
+function useViewportHeight() {
+  const [vh, setVh] = useState(null);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+
+    function update() {
+      const height = vv ? vv.height : window.innerHeight;
+      const offsetTop = vv ? vv.offsetTop : 0;
+      setVh({ height, offsetTop });
+    }
+
+    update();
+
+    if (vv) {
+      vv.addEventListener("resize", update);
+      vv.addEventListener("scroll", update);
+      return () => {
+        vv.removeEventListener("resize", update);
+        vv.removeEventListener("scroll", update);
+      };
+    } else {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+  }, []);
+
+  return vh;
+}
+
 // ─── ThreadLoader ─────────────────────────────────────────────────────────────
 function ThreadLoader({ onDone }) {
   const [line] = useState(() => randomFrom(LOADING_LINES));
@@ -569,6 +600,7 @@ export default function ThreadPage() {
   const { messages, otherPresence, connected, sendMessage, markSeen, historyLoaded } =
     useRedThread();
   const router = useRouter();
+  const viewport = useViewportHeight();
 
   const [input, setInput] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
@@ -594,6 +626,24 @@ export default function ThreadPage() {
   const isAtBottomRef = useRef(true);
   const initialScrollDoneRef = useRef(false);
   const prevMessageCountRef = useRef(0);
+
+  // ── Build shell style using real visual viewport ──────────────────────────
+  // This is the KEY fix: we use position:fixed + visualViewport height so the
+  // shell always fits exactly the visible screen — even when the keyboard is up.
+  const shellStyle = viewport
+    ? {
+        position: "fixed",
+        top: `${viewport.offsetTop}px`,
+        left: 0,
+        right: 0,
+        height: `${viewport.height}px`,
+        zIndex: 50,
+      }
+    : {
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+      };
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const getIsAtBottom = useCallback(() => {
@@ -645,7 +695,6 @@ export default function ThreadPage() {
         }
       }
 
-      // Remove divider when scrolled past it
       if (showNewMsgsDivider && unreadDividerRef.current) {
         const dividerRect = unreadDividerRef.current.getBoundingClientRect();
         const containerRect = el.getBoundingClientRect();
@@ -748,14 +797,13 @@ export default function ThreadPage() {
     setInput(e.target.value);
     const ta = e.target;
     ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 144) + "px";
+    ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
   };
 
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
 
-    // Clear divider + floating on send
     setShowNewMsgsDivider(false);
     setFirstUnreadIndex(null);
     setUnreadCount(0);
@@ -863,13 +911,26 @@ export default function ThreadPage() {
               duration: phase === "entering" ? 0.35 : 0.2,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="flex flex-col h-full max-w-2xl mx-auto"
-            style={{ willChange: "transform, opacity", position: "relative" }}
+            // ── Fixed shell that respects the visual viewport (keyboard-aware)
+            style={{
+              ...shellStyle,
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--surface-1, #0f172a)",
+              maxWidth: "672px",
+              marginLeft: "auto",
+              marginRight: "auto",
+              willChange: "transform, opacity",
+            }}
           >
             {/* ── Header ── */}
             <div
-              className="shrink-0 sticky top-0 z-10 bg-surface-1/80 backdrop-blur-sm"
               style={{
+                flexShrink: 0,
+                zIndex: 10,
+                background: "rgba(15,23,42,0.85)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
                 padding: "10px 16px",
                 borderBottom: "1px solid var(--surface-3, #334155)",
               }}
@@ -984,16 +1045,18 @@ export default function ThreadPage() {
               </div>
             </div>
 
-            {/* ── Messages ── */}
+            {/* ── Messages (fills remaining space, scrolls internally) ── */}
             <div
               ref={scrollRef}
               style={{
                 flex: 1,
                 overflowY: "auto",
+                overflowX: "hidden",
                 padding: "8px 14px 4px",
                 scrollbarWidth: "thin",
                 overscrollBehavior: "contain",
-                position: "relative",
+                // Prevent the scroll area from collapsing when keyboard opens
+                minHeight: 0,
               }}
             >
               {messages.length === 0 && (
@@ -1151,6 +1214,7 @@ export default function ThreadPage() {
             </div>
 
             {/* ── Floating "↓ N new messages" pill ── */}
+            {/* Positioned relative to the input bar, not the viewport bottom */}
             <AnimatePresence>
               {showFloating && floatingUnread > 0 && (
                 <motion.button
@@ -1161,7 +1225,9 @@ export default function ThreadPage() {
                   onClick={handleFloatingClick}
                   style={{
                     position: "absolute",
-                    bottom: "80px",
+                    // Sits just above the input bar — we use bottom relative to
+                    // the shell (which is already keyboard-aware), not 80px fixed.
+                    bottom: "72px",
                     left: "50%",
                     transform: "translateX(-50%)",
                     zIndex: 30,
@@ -1174,6 +1240,7 @@ export default function ThreadPage() {
                     alignItems: "center",
                     gap: "6px",
                     boxShadow: "0 4px 20px rgba(99,102,241,0.4)",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   <span
@@ -1191,12 +1258,17 @@ export default function ThreadPage() {
               )}
             </AnimatePresence>
 
-            {/* ── Input ── */}
+            {/* ── Input bar ── */}
             <div
-              className="shrink-0 bg-surface-1/50 backdrop-blur-sm"
               style={{
+                flexShrink: 0,
+                background: "rgba(15,23,42,0.6)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
                 padding: "8px 12px",
-                paddingBottom: "max(8px, env(safe-area-inset-bottom))",
+                // Safe area respected via env() — no fixed px hack needed
+                // because the shell height is already keyboard-aware via visualViewport
+                paddingBottom: "env(safe-area-inset-bottom, 8px)",
                 borderTop: "1px solid var(--surface-3, #334155)",
               }}
             >
@@ -1239,7 +1311,8 @@ export default function ThreadPage() {
                     caretColor: "#c7d2fe",
                     lineHeight: "1.5",
                     padding: "4px 0",
-                    maxHeight: "144px",
+                    // Cap at 120px so keyboard + banner don't crush the message area
+                    maxHeight: "120px",
                     overflowY: "auto",
                     scrollbarWidth: "none",
                     transition: "height 0.1s ease",
