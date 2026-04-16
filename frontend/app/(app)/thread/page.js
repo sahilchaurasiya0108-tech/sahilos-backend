@@ -298,7 +298,7 @@ export default function ThreadPage() {
                       style={{
                         fontFamily: isMine
                           ? "'Outfit', sans-serif"
-                          : "'Dancing Script', cursive",
+                          : "'Caveat', cursive",
                         fontSize: isMine ? "0.875rem" : "1.15rem",
                         color: isMine ? "#c7d2fe" : "#f1f5f9",
                         lineHeight: isMine ? "1.55" : "1.45",

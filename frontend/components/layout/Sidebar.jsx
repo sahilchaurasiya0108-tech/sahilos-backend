@@ -98,7 +98,7 @@ function NavContent({ onNavClick }) {
                 : "text-red-500/40 group-hover:text-red-400/70"
             )}
           />
-          <span className="flex-1">The Thread</span>
+          <span className="flex-1" style={{ fontFamily: "'Caveat', cursive", fontSize: '1.05rem', letterSpacing: '0.01em' }}>The Red Thread</span>
           {pathname !== "/thread" && (
             <span className="text-[10px] bg-red-500/10 text-red-400/70 px-1.5 py-0.5 rounded font-semibold">
               ∞
