@@ -4,15 +4,99 @@ import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
 import { format, isToday, isYesterday } from "date-fns";
+import { useRouter } from "next/navigation";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const THREAD_SERVER =
   process.env.NEXT_PUBLIC_RED_THREAD_URL || "http://localhost:4000";
 const USER_ID = "sahil"; // SahilOS is always Sahil
 
+// ─── Loading lines (randomised, subtle/playful, lowercase) ───────────────────
+const LOADING_LINES = [
+  "wait… connecting the thread",
+  "hold on… finding her",
+  "this better be worth it",
+  "loading… don't overthink it",
+  "establishing the thread…",
+  "let's see if she's here…",
+  "opening something that matters…",
+  "just a second… maybe…",
+  "not like you're in a hurry…",
+  "wait, wait... shehzadi sahiba",
+  "the red thread, huh?",
+];
+
+// ─── Exit lines ───────────────────────────────────────────────────────────────
+const EXIT_LINES = [
+  "leaving already?",
+  "that was quick",
+  "alright… later.",
+  "thread stays.",
+];
+
+function randomFrom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ─── ThreadLoader — entrance loading screen ───────────────────────────────────
+function ThreadLoader({ onDone }) {
+  const [line] = useState(() => randomFrom(LOADING_LINES));
+
+  useEffect(() => {
+    const t = setTimeout(onDone, 1200);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <motion.div
+      key="loader"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25, ease: "easeInOut" }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "var(--surface-1, #0f172a)",
+        gap: "16px",
+      }}
+    >
+      {/* Pulsing dot */}
+      <motion.div
+        animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.75, 0.4] }}
+        transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+        style={{
+          width: "8px",
+          height: "8px",
+          borderRadius: "50%",
+          background: "var(--brand, #6366f1)",
+        }}
+      />
+      <motion.p
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15, duration: 0.4 }}
+        style={{
+          fontFamily: "'Outfit', sans-serif",
+          fontSize: "12px",
+          color: "#64748b",
+          letterSpacing: "0.02em",
+          margin: 0,
+        }}
+      >
+        {line}
+      </motion.p>
+    </motion.div>
+  );
+}
+
 // ─── Presence formatter ───────────────────────────────────────────────────────
 function formatPresence(presence) {
-  // Sahil always sees Gauri's presence
   if (presence.status === "here") return "She's here";
 
   if (presence.status === "gone" && presence.lastSeen) {
@@ -83,8 +167,12 @@ function getGroupInfo(messages, index) {
   const prev = messages[index - 1];
   const next = messages[index + 1];
 
-  const sameAsPrev = prev && prev.sender === msg.sender && !shouldShowDivider(messages, index);
-  const sameAsNext = next && next.sender === msg.sender && !shouldShowDivider(messages, index + 1);
+  const sameAsPrev =
+    prev && prev.sender === msg.sender && !shouldShowDivider(messages, index);
+  const sameAsNext =
+    next &&
+    next.sender === msg.sender &&
+    !shouldShowDivider(messages, index + 1);
 
   return {
     isFirst: !sameAsPrev,
@@ -134,7 +222,6 @@ function useRedThread() {
     return () => socket.disconnect();
   }, []);
 
-  // sendMessage accepts optional replyTo object
   const sendMessage = useCallback((text, replyTo = null) => {
     if (!socketRef.current || !text?.trim()) return;
     socketRef.current.emit("threadMoved", {
@@ -157,11 +244,9 @@ function useRedThread() {
   return { messages, otherPresence, connected, sendMessage, markSeen };
 }
 
-// ─── ReplyPreview (inside bubble) ────────────────────────────────────────────
+// ─── ReplyPreview ─────────────────────────────────────────────────────────────
 const ReplyPreview = memo(function ReplyPreview({ replyTo, isMine, onScrollTo }) {
   if (!replyTo?._id) return null;
-
-  // Sahil's side: sender=sahil → "You", sender=gauri → "Her"
   const senderLabel = replyTo.sender === USER_ID ? "You" : "Her";
 
   return (
@@ -180,7 +265,9 @@ const ReplyPreview = memo(function ReplyPreview({ replyTo, isMine, onScrollTo })
     >
       <div
         style={{
-          borderLeft: `2px solid ${isMine ? "rgba(199,210,254,0.4)" : "var(--brand, #6366f1)"}`,
+          borderLeft: `2px solid ${
+            isMine ? "rgba(199,210,254,0.4)" : "var(--brand, #6366f1)"
+          }`,
           paddingLeft: "8px",
           paddingTop: "4px",
           paddingBottom: "4px",
@@ -260,7 +347,6 @@ const MessageBubble = memo(function MessageBubble({
 
   const translateX = isMine ? -swipeDelta : swipeDelta;
 
-  // Border radius based on group position
   const getBorderRadius = () => {
     if (isFirst && isLast) return "14px";
     if (isMine) {
@@ -288,7 +374,6 @@ const MessageBubble = memo(function MessageBubble({
         position: "relative",
       }}
     >
-      {/* Swipe indicator */}
       {swipeDelta > 10 && (
         <div
           style={{
@@ -307,7 +392,6 @@ const MessageBubble = memo(function MessageBubble({
         </div>
       )}
 
-      {/* Swipeable bubble */}
       <div
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -350,8 +434,10 @@ const MessageBubble = memo(function MessageBubble({
               lineHeight: isMine ? "1.5" : "1.35",
               color: isMine ? "#c7d2fe" : "#f1f5f9",
               margin: 0,
+              // ── TEXT PRESERVATION FIX ──
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
+              overflowWrap: "break-word",
             }}
           >
             {msg.text}
@@ -359,7 +445,6 @@ const MessageBubble = memo(function MessageBubble({
         </div>
       </div>
 
-      {/* Timestamp — only on last in cluster */}
       {isLast && (
         <div
           style={{
@@ -382,7 +467,13 @@ const MessageBubble = memo(function MessageBubble({
             {messageTime(msg.createdAt)}
           </p>
           {isMine && msg.seen && (
-            <span style={{ fontSize: "9px", color: "var(--brand, #6366f1)", opacity: 0.5 }}>
+            <span
+              style={{
+                fontSize: "9px",
+                color: "var(--brand, #6366f1)",
+                opacity: 0.5,
+              }}
+            >
               ✓
             </span>
           )}
@@ -395,7 +486,6 @@ const MessageBubble = memo(function MessageBubble({
 // ─── ReplyBanner ─────────────────────────────────────────────────────────────
 function ReplyBanner({ replyingTo, onCancel }) {
   if (!replyingTo) return null;
-
   const senderLabel = replyingTo.sender === USER_ID ? "You" : "Her";
 
   return (
@@ -475,13 +565,32 @@ function ReplyBanner({ replyingTo, onCancel }) {
 export default function ThreadPage() {
   const { messages, otherPresence, connected, sendMessage, markSeen } =
     useRedThread();
+  const router = useRouter();
+
   const [input, setInput] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
   const [highlightedId, setHighlightedId] = useState(null);
+
+  // ── Entrance / exit state ──
+  const [phase, setPhase] = useState("loading"); // 'loading' | 'entering' | 'open' | 'closing'
+  const [exitLine] = useState(() => randomFrom(EXIT_LINES));
+
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
   const messageRefs = useRef({});
+
+  // Loader → entering → open
+  const handleLoaderDone = useCallback(() => {
+    setPhase("entering");
+    setTimeout(() => setPhase("open"), 400);
+  }, []);
+
+  // Close with exit animation
+  const handleClose = useCallback(() => {
+    setPhase("closing");
+    setTimeout(() => router.back(), 600);
+  }, [router]);
 
   // Auto-scroll only if near bottom
   useEffect(() => {
@@ -497,10 +606,13 @@ export default function ThreadPage() {
     markSeen();
   }, [markSeen]);
 
+  // ── Textarea auto-expand ──
   const handleInputChange = (e) => {
     setInput(e.target.value);
-    e.target.style.height = "auto";
-    e.target.style.height = Math.min(e.target.scrollHeight, 112) + "px";
+    const ta = e.target;
+    ta.style.height = "auto";
+    // Max ~6 lines ≈ 144px
+    ta.style.height = Math.min(ta.scrollHeight, 144) + "px";
   };
 
   const handleSend = () => {
@@ -513,7 +625,10 @@ export default function ThreadPage() {
       inputRef.current.style.height = "auto";
       inputRef.current.focus();
     }
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    setTimeout(
+      () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
+      50
+    );
   };
 
   const handleKey = (e) => {
@@ -538,305 +653,403 @@ export default function ThreadPage() {
   const isHere = otherPresence.status === "here";
 
   return (
-    <div className="flex flex-col h-full max-w-2xl mx-auto">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div
-        className="shrink-0 sticky top-0 z-10 bg-surface-1/80 backdrop-blur-sm"
-        style={{
-          padding: "10px 16px",
-          borderBottom: "1px solid var(--surface-3, #334155)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            <div
-              style={{
-                width: "34px",
-                height: "34px",
-                borderRadius: "50%",
-                background:
-                  "linear-gradient(135deg, rgba(239,68,68,0.2), rgba(225,29,72,0.2))",
-                border: "1px solid rgba(239,68,68,0.2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "14px",
-              }}
-            >
-              🔴
-            </div>
-            <motion.div
-              animate={
-                isHere
-                  ? { scale: [1, 1.3, 1], opacity: [0.7, 1, 0.7] }
-                  : { scale: 1 }
-              }
-              transition={isHere ? { duration: 2, repeat: Infinity } : {}}
-              style={{
-                position: "absolute",
-                bottom: "-1px",
-                right: "-1px",
-                width: "9px",
-                height: "9px",
-                borderRadius: "50%",
-                background: isHere ? "#4ade80" : "#334155",
-                border: "2px solid var(--surface-1, #0f172a)",
-              }}
-            />
-          </div>
+    <>
+      {/* ── Loading screen ── */}
+      <AnimatePresence>
+        {phase === "loading" && <ThreadLoader onDone={handleLoaderDone} />}
+      </AnimatePresence>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "#f1f5f9",
-                margin: 0,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              The Red Thread
-            </h1>
-            <motion.p
-              key={presenceText}
-              initial={{ opacity: 0, y: 2 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              style={{
-                fontSize: "10px",
-                color: isHere ? "#4ade80" : "#64748b",
-                fontStyle: "italic",
-                margin: 0,
-              }}
-            >
-              {presenceText}
-            </motion.p>
-          </div>
-
-          <div
-            title={connected ? "Connected" : "Reconnecting…"}
-            style={{
-              width: "5px",
-              height: "5px",
-              borderRadius: "50%",
-              background: connected ? "#4ade80" : "#334155",
-              flexShrink: 0,
-            }}
-          />
-        </div>
-      </div>
-
-      {/* ── Messages ───────────────────────────────────────────────────────── */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "8px 14px 4px",
-          scrollbarWidth: "thin",
-        }}
-      >
-        {messages.length === 0 && (
+      {/* ── Exit text overlay ── */}
+      <AnimatePresence>
+        {phase === "closing" && (
           <motion.div
+            key="exit-text"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.8 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
             style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 90,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              height: "100%",
+              pointerEvents: "none",
+              background: "var(--surface-1, #0f172a)",
             }}
           >
-            <p
+            <motion.p
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 0.4, y: 0 }}
+              transition={{ duration: 0.25, delay: 0.05 }}
               style={{
-                fontFamily: "'Dancing Script', cursive",
-                fontSize: "1.2rem",
-                color: "#475569",
-                textAlign: "center",
+                fontFamily: "'Outfit', sans-serif",
+                fontSize: "12px",
+                color: "#64748b",
+                letterSpacing: "0.02em",
               }}
             >
-              the thread is waiting…
-            </p>
+              {exitLine}
+            </motion.p>
           </motion.div>
         )}
+      </AnimatePresence>
 
-        <AnimatePresence initial={false}>
-          {messages.map((msg, i) => {
-            const showDivider = shouldShowDivider(messages, i);
-            const groupInfo = getGroupInfo(messages, i);
-            const isHighlighted = highlightedId === msg._id;
+      {/* ── Main chat shell — entrance + exit animation ── */}
+      <AnimatePresence>
+        {(phase === "entering" || phase === "open") && (
+          <motion.div
+            key="chat-shell"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{
+              duration: phase === "entering" ? 0.35 : 0.2,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className="flex flex-col h-full max-w-2xl mx-auto"
+            style={{ willChange: "transform, opacity" }}
+          >
+            {/* ── Header ── */}
+            <div
+              className="shrink-0 sticky top-0 z-10 bg-surface-1/80 backdrop-blur-sm"
+              style={{
+                padding: "10px 16px",
+                borderBottom: "1px solid var(--surface-3, #334155)",
+              }}
+            >
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
+              >
+                {/* ── Close button ── */}
+                <motion.button
+                  whileTap={{ scale: 0.88 }}
+                  onClick={handleClose}
+                  aria-label="Close thread"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "4px 6px 4px 0",
+                    cursor: "pointer",
+                    color: "#64748b",
+                    fontSize: "15px",
+                    lineHeight: 1,
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    transition: "color 0.2s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.color = "#94a3b8")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.color = "#64748b")
+                  }
+                >
+                  ✕
+                </motion.button>
 
-            return (
-              <div key={msg._id || i}>
-                {showDivider && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <div
                     style={{
+                      width: "34px",
+                      height: "34px",
+                      borderRadius: "50%",
+                      background:
+                        "linear-gradient(135deg, rgba(239,68,68,0.2), rgba(225,29,72,0.2))",
+                      border: "1px solid rgba(239,68,68,0.2)",
                       display: "flex",
                       alignItems: "center",
-                      gap: "10px",
-                      margin: "14px 0 8px",
+                      justifyContent: "center",
+                      fontSize: "14px",
                     }}
                   >
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background: "#1e293b",
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: "9px",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.12em",
-                        color: "#475569",
-                        fontFamily: "'Outfit', sans-serif",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {dayLabel(msg.createdAt)}
-                    </span>
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background: "#1e293b",
-                      }}
-                    />
-                  </motion.div>
-                )}
-
-                {/* Highlight wrapper */}
-                <div
-                  ref={(el) => {
-                    if (el) messageRefs.current[msg._id] = el;
-                  }}
-                  style={{
-                    borderRadius: "10px",
-                    transition: "background 0.3s ease",
-                    background: isHighlighted
-                      ? "rgba(99,102,241,0.1)"
-                      : "transparent",
-                    padding: isHighlighted ? "0 4px" : "0",
-                    margin: isHighlighted ? "0 -4px" : "0",
-                  }}
-                >
-                  <MessageBubble
-                    msg={msg}
-                    groupInfo={groupInfo}
-                    onSwipeReply={setReplyingTo}
-                    onScrollToReply={scrollToMessage}
+                    🔴
+                  </div>
+                  <motion.div
+                    animate={
+                      isHere
+                        ? { scale: [1, 1.3, 1], opacity: [0.7, 1, 0.7] }
+                        : { scale: 1 }
+                    }
+                    transition={
+                      isHere ? { duration: 2, repeat: Infinity } : {}
+                    }
+                    style={{
+                      position: "absolute",
+                      bottom: "-1px",
+                      right: "-1px",
+                      width: "9px",
+                      height: "9px",
+                      borderRadius: "50%",
+                      background: isHere ? "#4ade80" : "#334155",
+                      border: "2px solid var(--surface-1, #0f172a)",
+                    }}
                   />
                 </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h1
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#f1f5f9",
+                      margin: 0,
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    The Red Thread
+                  </h1>
+                  <motion.p
+                    key={presenceText}
+                    initial={{ opacity: 0, y: 2 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    style={{
+                      fontSize: "10px",
+                      color: isHere ? "#4ade80" : "#64748b",
+                      fontStyle: "italic",
+                      margin: 0,
+                    }}
+                  >
+                    {presenceText}
+                  </motion.p>
+                </div>
+
+                <div
+                  title={connected ? "Connected" : "Reconnecting…"}
+                  style={{
+                    width: "5px",
+                    height: "5px",
+                    borderRadius: "50%",
+                    background: connected ? "#4ade80" : "#334155",
+                    flexShrink: 0,
+                  }}
+                />
               </div>
-            );
-          })}
-        </AnimatePresence>
-        <div ref={bottomRef} style={{ height: "4px" }} />
-      </div>
+            </div>
 
-      {/* ── Input ──────────────────────────────────────────────────────────── */}
-      <div
-        className="shrink-0 bg-surface-1/50 backdrop-blur-sm"
-        style={{
-          padding: "8px 12px",
-          paddingBottom: "max(8px, env(safe-area-inset-bottom))",
-          borderTop: "1px solid var(--surface-3, #334155)",
-        }}
-      >
-        <AnimatePresence>
-          {replyingTo && (
-            <ReplyBanner
-              replyingTo={replyingTo}
-              onCancel={() => setReplyingTo(null)}
-            />
-          )}
-        </AnimatePresence>
+            {/* ── Messages ── */}
+            <div
+              ref={scrollRef}
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "8px 14px 4px",
+                scrollbarWidth: "thin",
+                overscrollBehavior: "contain",
+              }}
+            >
+              {messages.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.8 }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "100%",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: "'Dancing Script', cursive",
+                      fontSize: "1.2rem",
+                      color: "#475569",
+                      textAlign: "center",
+                    }}
+                  >
+                    the thread is waiting…
+                  </p>
+                </motion.div>
+              )}
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-end",
-            gap: "8px",
-            background: "var(--surface-2, #1e293b)",
-            border: "1px solid var(--surface-3, #334155)",
-            borderRadius: "14px",
-            padding: "6px 6px 6px 12px",
-          }}
-        >
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKey}
-            placeholder="pull the thread…"
-            rows={1}
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              resize: "none",
-              fontFamily: "'Outfit', sans-serif",
-              fontSize: "13.5px",
-              color: "#e2e8f0",
-              caretColor: "#c7d2fe",
-              lineHeight: "1.5",
-              padding: "4px 0",
-              maxHeight: "112px",
-              overflowY: "auto",
-              scrollbarWidth: "none",
-            }}
-          />
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            whileHover={{ scale: 1.04 }}
-            onClick={handleSend}
-            disabled={!input.trim() || !connected}
-            style={{
-              width: "32px",
-              height: "32px",
-              borderRadius: "10px",
-              border: "1px solid rgba(99,102,241,0.3)",
-              cursor: "pointer",
-              background: "rgba(99,102,241,0.2)",
-              color: "var(--brand, #6366f1)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              opacity: !input.trim() || !connected ? 0.25 : 1,
-              transition: "opacity 0.2s",
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M7 12V2M7 2L2 7M7 2L12 7"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.button>
-        </div>
-        <p
-          style={{
-            fontSize: "9px",
-            color: "#1e293b",
-            textAlign: "center",
-            marginTop: "4px",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            fontFamily: "'Outfit', sans-serif",
-          }}
-        >
-          only the two of you
-        </p>
-      </div>
-    </div>
+              <AnimatePresence initial={false}>
+                {messages.map((msg, i) => {
+                  const showDivider = shouldShowDivider(messages, i);
+                  const groupInfo = getGroupInfo(messages, i);
+                  const isHighlighted = highlightedId === msg._id;
+
+                  return (
+                    <div key={msg._id || i}>
+                      {showDivider && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            margin: "14px 0 8px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              flex: 1,
+                              height: "1px",
+                              background: "#1e293b",
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: "9px",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.12em",
+                              color: "#475569",
+                              fontFamily: "'Outfit', sans-serif",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {dayLabel(msg.createdAt)}
+                          </span>
+                          <div
+                            style={{
+                              flex: 1,
+                              height: "1px",
+                              background: "#1e293b",
+                            }}
+                          />
+                        </motion.div>
+                      )}
+
+                      <div
+                        ref={(el) => {
+                          if (el) messageRefs.current[msg._id] = el;
+                        }}
+                        style={{
+                          borderRadius: "10px",
+                          transition: "background 0.3s ease",
+                          background: isHighlighted
+                            ? "rgba(99,102,241,0.1)"
+                            : "transparent",
+                          padding: isHighlighted ? "0 4px" : "0",
+                          margin: isHighlighted ? "0 -4px" : "0",
+                        }}
+                      >
+                        <MessageBubble
+                          msg={msg}
+                          groupInfo={groupInfo}
+                          onSwipeReply={setReplyingTo}
+                          onScrollToReply={scrollToMessage}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </AnimatePresence>
+              <div ref={bottomRef} style={{ height: "4px" }} />
+            </div>
+
+            {/* ── Input ── */}
+            <div
+              className="shrink-0 bg-surface-1/50 backdrop-blur-sm"
+              style={{
+                padding: "8px 12px",
+                paddingBottom: "max(8px, env(safe-area-inset-bottom))",
+                borderTop: "1px solid var(--surface-3, #334155)",
+              }}
+            >
+              <AnimatePresence>
+                {replyingTo && (
+                  <ReplyBanner
+                    replyingTo={replyingTo}
+                    onCancel={() => setReplyingTo(null)}
+                  />
+                )}
+              </AnimatePresence>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: "8px",
+                  background: "var(--surface-2, #1e293b)",
+                  border: "1px solid var(--surface-3, #334155)",
+                  borderRadius: "14px",
+                  padding: "6px 6px 6px 12px",
+                }}
+              >
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKey}
+                  placeholder="pull the thread…"
+                  rows={1}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    resize: "none",
+                    fontFamily: "'Outfit', sans-serif",
+                    fontSize: "13.5px",
+                    color: "#e2e8f0",
+                    caretColor: "#c7d2fe",
+                    lineHeight: "1.5",
+                    padding: "4px 0",
+                    // Auto-expand: max ~6 lines
+                    maxHeight: "144px",
+                    overflowY: "auto",
+                    scrollbarWidth: "none",
+                    // Smooth height growth
+                    transition: "height 0.1s ease",
+                    // Preserve typed formatting
+                    whiteSpace: "pre-wrap",
+                  }}
+                />
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  whileHover={{ scale: 1.04 }}
+                  onClick={handleSend}
+                  disabled={!input.trim() || !connected}
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "10px",
+                    border: "1px solid rgba(99,102,241,0.3)",
+                    cursor: "pointer",
+                    background: "rgba(99,102,241,0.2)",
+                    color: "var(--brand, #6366f1)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    opacity: !input.trim() || !connected ? 0.25 : 1,
+                    transition: "opacity 0.2s",
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <path
+                      d="M7 12V2M7 2L2 7M7 2L12 7"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </motion.button>
+              </div>
+
+              <p
+                style={{
+                  fontSize: "9px",
+                  color: "#1e293b",
+                  textAlign: "center",
+                  marginTop: "4px",
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                only the two of you
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
-} 
+}
