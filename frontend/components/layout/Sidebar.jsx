@@ -18,6 +18,28 @@ const ICON_MAP = {
   Brain, Compass, BarChart2, Trophy, Bell,
 };
 
+// Custom Thread icon (inline SVG as component)
+function ThreadIcon({ size = 16, className }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      className={className}
+    >
+      <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M8 1v2M8 13v2M1 8h2M13 8h2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity="0.5"
+      />
+    </svg>
+  );
+}
+
 const NAV_ITEMS = [
   { href: "/dashboard",     label: "Dashboard",     icon: "LayoutDashboard" },
   { href: "/tasks",         label: "Tasks",         icon: "CheckSquare" },
@@ -37,7 +59,7 @@ const NAV_ITEMS = [
   { href: "/ai",            label: "AI Assistant",  icon: "Sparkles" },
 ];
 
-// ── Shared nav content (used by both desktop sidebar + mobile drawer) ─────────
+// ── Shared nav content ────────────────────────────────────────────────────────
 function NavContent({ onNavClick }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
@@ -57,6 +79,37 @@ function NavContent({ onNavClick }) {
 
       {/* Nav links */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+        {/* ── Red Thread (special item, always at top of nav) ───────────── */}
+        <Link
+          href="/thread"
+          onClick={onNavClick}
+          className={clsx(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group mb-2",
+            pathname === "/thread"
+              ? "bg-red-500/15 text-red-400"
+              : "text-slate-400 hover:text-slate-100 hover:bg-surface-2 border border-dashed border-red-500/20"
+          )}
+        >
+          <ThreadIcon
+            size={16}
+            className={clsx(
+              pathname === "/thread"
+                ? "text-red-400"
+                : "text-red-500/40 group-hover:text-red-400/70"
+            )}
+          />
+          <span className="flex-1">The Thread</span>
+          {pathname !== "/thread" && (
+            <span className="text-[10px] bg-red-500/10 text-red-400/70 px-1.5 py-0.5 rounded font-semibold">
+              ∞
+            </span>
+          )}
+          {pathname === "/thread" && (
+            <ChevronRight size={12} className="text-red-400 opacity-60" />
+          )}
+        </Link>
+
+        {/* ── Regular nav items ─────────────────────────────────────────── */}
         {NAV_ITEMS.map(({ href, label, icon }) => {
           const Icon   = ICON_MAP[icon];
           const active = pathname === href || pathname.startsWith(href + "/");
@@ -128,14 +181,12 @@ function DesktopSidebar() {
 function MobileDrawer({ open, onClose }) {
   return (
     <>
-      {/* Backdrop */}
       {open && (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
           onClick={onClose}
         />
       )}
-      {/* Drawer panel */}
       <aside
         className={clsx(
           "fixed top-0 left-0 z-50 h-full w-72 bg-surface-1 border-r border-surface-3",
@@ -143,7 +194,6 @@ function MobileDrawer({ open, onClose }) {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Close button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-500 hover:text-slate-100 hover:bg-surface-2"
@@ -156,7 +206,6 @@ function MobileDrawer({ open, onClose }) {
   );
 }
 
-// ── Mobile Top Bar ────────────────────────────────────────────────────────────
 export function MobileMenuButton({ onClick }) {
   return (
     <button
@@ -168,7 +217,6 @@ export function MobileMenuButton({ onClick }) {
   );
 }
 
-// ── Combined export ───────────────────────────────────────────────────────────
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -176,7 +224,6 @@ export default function Sidebar() {
     <>
       <DesktopSidebar />
       <MobileDrawer open={mobileOpen} onClose={() => setMobileOpen(false)} />
-      {/* Mobile hamburger button — rendered inside Topbar via context */}
       <button
         id="mobile-menu-btn"
         onClick={() => setMobileOpen(true)}
