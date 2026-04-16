@@ -11,6 +11,8 @@ const THREAD_SERVER =
   process.env.NEXT_PUBLIC_RED_THREAD_URL || "http://localhost:4000";
 const USER_ID = "sahil"; // SahilOS is always Sahil
 const LAST_SEEN_KEY = "sahilos_thread_last_seen_id";
+const TYPING_DEBOUNCE_MS = 400;
+const TYPING_STOP_DELAY_MS = 3000;
 
 // ─── Loading lines ─────────────────────────────────────────────────────────────
 const LOADING_LINES = [
@@ -36,6 +38,16 @@ const EXIT_LINES = [
 
 function randomFrom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ─── Detect if user is on a touch/mobile device ───────────────────────────────
+function isMobileDevice() {
+  if (typeof window === "undefined") return false;
+  return (
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+  );
 }
 
 // ─── useViewportHeight — tracks real visual viewport (keyboard-aware) ─────────
@@ -211,6 +223,61 @@ function getGroupInfo(messages, index) {
   };
 }
 
+// ─── MessageTicks ─────────────────────────────────────────────────────────────
+const MessageTicks = memo(function MessageTicks({ seen }) {
+  return (
+    <span
+      style={{
+        fontSize: "9px",
+        color: seen ? "var(--brand, #6366f1)" : "#475569",
+        opacity: seen ? 0.6 : 0.4,
+        letterSpacing: "-1px",
+        lineHeight: 1,
+        userSelect: "none",
+        transition: "color 0.4s ease, opacity 0.4s ease",
+      }}
+      title={seen ? "Seen" : "Sent"}
+    >
+      {seen ? "✓✓" : "✓"}
+    </span>
+  );
+});
+
+// ─── TypingIndicator ──────────────────────────────────────────────────────────
+const TypingIndicator = memo(function TypingIndicator({ isTyping }) {
+  return (
+    <AnimatePresence>
+      {isTyping && (
+        <motion.div
+          key="typing"
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 4 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          style={{
+            padding: "2px 4px 6px",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "11px",
+              color: "#475569",
+              fontStyle: "italic",
+              letterSpacing: "0.01em",
+            }}
+          >
+            She's typing…
+          </span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+});
+
 // ─── useRedThread hook ────────────────────────────────────────────────────────
 function useRedThread() {
   const [messages, setMessages] = useState([]);
@@ -220,7 +287,14 @@ function useRedThread() {
   });
   const [connected, setConnected] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   const socketRef = useRef(null);
+  const typingStopTimerRef = useRef(null);
+
+  // ── Typing emit state — all in refs to avoid stale closures ──────────────
+  const isTypingEmittedRef = useRef(false);
+  const typingDebounceRef = useRef(null);
+  const typingStopRef = useRef(null);
 
   useEffect(() => {
     const socket = io(THREAD_SERVER, {
@@ -236,11 +310,15 @@ function useRedThread() {
       socket.emit("pullThread", { userId: USER_ID });
     });
 
-    socket.on("disconnect", () => setConnected(false));
+    socket.on("disconnect", () => {
+      setConnected(false);
+      setIsOtherTyping(false);
+    });
 
     socket.on("threadHistory", ({ messages }) => {
       setMessages(messages);
       setHistoryLoaded(true);
+      socket.emit("messageSeen", { viewer: USER_ID });
     });
 
     socket.on("threadMoved", ({ message }) => {
@@ -248,17 +326,65 @@ function useRedThread() {
         if (prev.some((m) => m._id === message._id)) return prev;
         return [...prev, message];
       });
+      if (message.sender !== USER_ID) {
+        setTimeout(() => {
+          socket.emit("messageSeen", { viewer: USER_ID });
+        }, 300);
+      }
+      if (message.sender !== USER_ID) {
+        setIsOtherTyping(false);
+      }
     });
 
     socket.on("presence", ({ userId, status, lastSeen }) => {
       if (userId !== USER_ID) setOtherPresence({ status, lastSeen });
     });
 
-    return () => socket.disconnect();
+    socket.on("typing", ({ sender }) => {
+      if (sender !== USER_ID) {
+        setIsOtherTyping(true);
+        clearTimeout(typingStopTimerRef.current);
+        typingStopTimerRef.current = setTimeout(() => {
+          setIsOtherTyping(false);
+        }, TYPING_STOP_DELAY_MS + 500);
+      }
+    });
+
+    socket.on("stopTyping", ({ sender }) => {
+      if (sender !== USER_ID) {
+        clearTimeout(typingStopTimerRef.current);
+        setIsOtherTyping(false);
+      }
+    });
+
+    socket.on("messagesSeenUpdate", ({ messageIds }) => {
+      const idSet = new Set(messageIds);
+      setMessages((prev) =>
+        prev.map((m) =>
+          idSet.has(String(m._id)) ? { ...m, seen: true } : m
+        )
+      );
+    });
+
+    return () => {
+      clearTimeout(typingStopTimerRef.current);
+      clearTimeout(typingDebounceRef.current);
+      clearTimeout(typingStopRef.current);
+      socket.disconnect();
+    };
   }, []);
 
   const sendMessage = useCallback((text, replyTo = null) => {
     if (!socketRef.current || !text?.trim()) return;
+
+    // ── Stop typing immediately on send ──────────────────────────────────
+    clearTimeout(typingDebounceRef.current);
+    clearTimeout(typingStopRef.current);
+    if (isTypingEmittedRef.current) {
+      socketRef.current.emit("stopTyping", { sender: USER_ID });
+      isTypingEmittedRef.current = false;
+    }
+
     socketRef.current.emit("threadMoved", {
       sender: USER_ID,
       text: text.trim(),
@@ -268,7 +394,41 @@ function useRedThread() {
     });
   }, []);
 
+  // ── notifyTyping — called on every keystroke ──────────────────────────────
+  // Fix: emit "typing" once on first keystroke (debounced), then keep the
+  // stop-timer rolling on every subsequent keystroke so it only fires after
+  // the user truly stops.  The flag is only reset when stopTyping is actually
+  // emitted, preventing the flicker caused by the flag being cleared too early.
+  const notifyTyping = useCallback(() => {
+    if (!socketRef.current) return;
+
+    // Always push the stop-timer forward — fires only after real inactivity
+    clearTimeout(typingStopRef.current);
+    typingStopRef.current = setTimeout(() => {
+      if (isTypingEmittedRef.current && socketRef.current) {
+        socketRef.current.emit("stopTyping", { sender: USER_ID });
+        isTypingEmittedRef.current = false;
+      }
+    }, TYPING_STOP_DELAY_MS);
+
+    // Emit "typing" start once, debounced — don't re-emit while already typing
+    if (!isTypingEmittedRef.current) {
+      // Set the flag optimistically before the debounce fires so rapid
+      // keystrokes don't schedule multiple debounced emits
+      clearTimeout(typingDebounceRef.current);
+      typingDebounceRef.current = setTimeout(() => {
+        if (socketRef.current) {
+          socketRef.current.emit("typing", { sender: USER_ID });
+          isTypingEmittedRef.current = true;
+        }
+      }, TYPING_DEBOUNCE_MS);
+    }
+  }, []);
+
   const markSeen = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit("messageSeen", { viewer: USER_ID });
+    }
     fetch(`${THREAD_SERVER}/thread/messages/seen`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -276,7 +436,16 @@ function useRedThread() {
     }).catch(() => {});
   }, []);
 
-  return { messages, otherPresence, connected, sendMessage, markSeen, historyLoaded };
+  return {
+    messages,
+    otherPresence,
+    connected,
+    sendMessage,
+    markSeen,
+    historyLoaded,
+    isOtherTyping,
+    notifyTyping,
+  };
 }
 
 // ─── ReplyPreview ─────────────────────────────────────────────────────────────
@@ -500,17 +669,7 @@ const MessageBubble = memo(function MessageBubble({
           >
             {messageTime(msg.createdAt)}
           </p>
-          {isMine && msg.seen && (
-            <span
-              style={{
-                fontSize: "9px",
-                color: "var(--brand, #6366f1)",
-                opacity: 0.5,
-              }}
-            >
-              ✓
-            </span>
-          )}
+          {isMine && <MessageTicks seen={!!msg.seen} />}
         </div>
       )}
     </motion.div>
@@ -597,8 +756,16 @@ function ReplyBanner({ replyingTo, onCancel }) {
 
 // ─── Thread Page ──────────────────────────────────────────────────────────────
 export default function ThreadPage() {
-  const { messages, otherPresence, connected, sendMessage, markSeen, historyLoaded } =
-    useRedThread();
+  const {
+    messages,
+    otherPresence,
+    connected,
+    sendMessage,
+    markSeen,
+    historyLoaded,
+    isOtherTyping,
+    notifyTyping,
+  } = useRedThread();
   const router = useRouter();
   const viewport = useViewportHeight();
 
@@ -626,10 +793,13 @@ export default function ThreadPage() {
   const isAtBottomRef = useRef(true);
   const initialScrollDoneRef = useRef(false);
   const prevMessageCountRef = useRef(0);
+  const isMobileRef = useRef(false);
+
+  useEffect(() => {
+    isMobileRef.current = isMobileDevice();
+  }, []);
 
   // ── Build shell style using real visual viewport ──────────────────────────
-  // This is the KEY fix: we use position:fixed + visualViewport height so the
-  // shell always fits exactly the visible screen — even when the keyboard is up.
   const shellStyle = viewport
     ? {
         position: "fixed",
@@ -780,6 +950,13 @@ export default function ThreadPage() {
     prevMessageCountRef.current = newCount;
   }, [messages, scrollToBottom]);
 
+  // ── Auto-scroll when typing indicator appears at bottom ───────────────────
+  useEffect(() => {
+    if (isOtherTyping && isAtBottomRef.current) {
+      requestAnimationFrame(() => scrollToBottom("smooth"));
+    }
+  }, [isOtherTyping, scrollToBottom]);
+
   // Loader → entering → open
   const handleLoaderDone = useCallback(() => {
     setPhase("entering");
@@ -798,6 +975,8 @@ export default function ThreadPage() {
     const ta = e.target;
     ta.style.height = "auto";
     ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
+    // Always notify typing as long as there's any input (including mid-deletion)
+    notifyTyping();
   };
 
   const handleSend = () => {
@@ -821,9 +1000,17 @@ export default function ThreadPage() {
   };
 
   const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    // On mobile: Enter always inserts a newline — send button only
+    // On desktop: Enter sends, Shift+Enter inserts newline
+    if (e.key === "Enter") {
+      if (isMobileRef.current) {
+        // Let the browser insert the newline naturally — do nothing here
+        return;
+      }
+      if (!e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
     }
     if (e.key === "Escape" && replyingTo) {
       setReplyingTo(null);
@@ -849,8 +1036,10 @@ export default function ThreadPage() {
   };
 
   useEffect(() => {
-    markSeen();
-  }, [markSeen]);
+    if (messages.length > 0) {
+      markSeen();
+    }
+  }, [messages, markSeen]);
 
   const presenceText = formatPresence(otherPresence);
   const isHere = otherPresence.status === "here";
@@ -911,7 +1100,6 @@ export default function ThreadPage() {
               duration: phase === "entering" ? 0.35 : 0.2,
               ease: [0.22, 1, 0.36, 1],
             }}
-            // ── Fixed shell that respects the visual viewport (keyboard-aware)
             style={{
               ...shellStyle,
               display: "flex",
@@ -1017,18 +1205,18 @@ export default function ThreadPage() {
                     The Red Thread
                   </h1>
                   <motion.p
-                    key={presenceText}
+                    key={isOtherTyping ? "typing" : presenceText}
                     initial={{ opacity: 0, y: 2 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
+                    transition={{ duration: 0.3 }}
                     style={{
                       fontSize: "10px",
-                      color: isHere ? "#4ade80" : "#64748b",
+                      color: isOtherTyping ? "#94a3b8" : isHere ? "#4ade80" : "#64748b",
                       fontStyle: "italic",
                       margin: 0,
                     }}
                   >
-                    {presenceText}
+                    {isOtherTyping ? "She's typing…" : presenceText}
                   </motion.p>
                 </div>
 
@@ -1045,7 +1233,7 @@ export default function ThreadPage() {
               </div>
             </div>
 
-            {/* ── Messages (fills remaining space, scrolls internally) ── */}
+            {/* ── Messages ── */}
             <div
               ref={scrollRef}
               style={{
@@ -1055,7 +1243,6 @@ export default function ThreadPage() {
                 padding: "8px 14px 4px",
                 scrollbarWidth: "thin",
                 overscrollBehavior: "contain",
-                // Prevent the scroll area from collapsing when keyboard opens
                 minHeight: 0,
               }}
             >
@@ -1210,11 +1397,14 @@ export default function ThreadPage() {
                   );
                 })}
               </AnimatePresence>
+
+              {/* ── Typing indicator (in message stream) ── */}
+              <TypingIndicator isTyping={isOtherTyping} />
+
               <div ref={bottomRef} style={{ height: "4px" }} />
             </div>
 
             {/* ── Floating "↓ N new messages" pill ── */}
-            {/* Positioned relative to the input bar, not the viewport bottom */}
             <AnimatePresence>
               {showFloating && floatingUnread > 0 && (
                 <motion.button
@@ -1225,8 +1415,6 @@ export default function ThreadPage() {
                   onClick={handleFloatingClick}
                   style={{
                     position: "absolute",
-                    // Sits just above the input bar — we use bottom relative to
-                    // the shell (which is already keyboard-aware), not 80px fixed.
                     bottom: "72px",
                     left: "50%",
                     transform: "translateX(-50%)",
@@ -1266,8 +1454,6 @@ export default function ThreadPage() {
                 backdropFilter: "blur(12px)",
                 WebkitBackdropFilter: "blur(12px)",
                 padding: "8px 12px",
-                // Safe area respected via env() — no fixed px hack needed
-                // because the shell height is already keyboard-aware via visualViewport
                 paddingBottom: "env(safe-area-inset-bottom, 8px)",
                 borderTop: "1px solid var(--surface-3, #334155)",
               }}
@@ -1311,7 +1497,6 @@ export default function ThreadPage() {
                     caretColor: "#c7d2fe",
                     lineHeight: "1.5",
                     padding: "4px 0",
-                    // Cap at 120px so keyboard + banner don't crush the message area
                     maxHeight: "120px",
                     overflowY: "auto",
                     scrollbarWidth: "none",
