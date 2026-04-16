@@ -159,7 +159,7 @@ function useRedThread() {
 
 // ─── ReplyPreview (inside bubble) ────────────────────────────────────────────
 const ReplyPreview = memo(function ReplyPreview({ replyTo, isMine, onScrollTo }) {
-  if (!replyTo) return null;
+  if (!replyTo?._id) return null;
 
   // Sahil's side: sender=sahil → "You", sender=gauri → "Her"
   const senderLabel = replyTo.sender === USER_ID ? "You" : "Her";
@@ -323,7 +323,7 @@ const MessageBubble = memo(function MessageBubble({
         <div
           data-message-id={msg._id}
           style={{
-            padding: msg.replyTo ? "8px 12px 8px 10px" : "7px 12px",
+            padding: msg.replyTo?._id ? "8px 12px 8px 10px" : "7px 12px",
             borderRadius: getBorderRadius(),
             background: isMine
               ? "var(--brand-bg, rgba(99,102,241,0.2))"
@@ -333,7 +333,7 @@ const MessageBubble = memo(function MessageBubble({
               : "1px solid var(--surface-3, #334155)",
           }}
         >
-          {msg.replyTo && (
+          {msg.replyTo?._id && (
             <ReplyPreview
               replyTo={msg.replyTo}
               isMine={isMine}
@@ -839,4 +839,4 @@ export default function ThreadPage() {
       </div>
     </div>
   );
-}
+} 
