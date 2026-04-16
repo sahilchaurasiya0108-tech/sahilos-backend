@@ -10,8 +10,9 @@ import { useRouter } from "next/navigation";
 const THREAD_SERVER =
   process.env.NEXT_PUBLIC_RED_THREAD_URL || "http://localhost:4000";
 const USER_ID = "sahil"; // SahilOS is always Sahil
+const LAST_SEEN_KEY = "sahilos_thread_last_seen_id";
 
-// ─── Loading lines (randomised, subtle/playful, lowercase) ───────────────────
+// ─── Loading lines ─────────────────────────────────────────────────────────────
 const LOADING_LINES = [
   "wait… connecting the thread",
   "hold on… finding her",
@@ -26,7 +27,6 @@ const LOADING_LINES = [
   "the red thread, huh?",
 ];
 
-// ─── Exit lines ───────────────────────────────────────────────────────────────
 const EXIT_LINES = [
   "leaving already?",
   "that was quick",
@@ -38,7 +38,7 @@ function randomFrom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// ─── ThreadLoader — entrance loading screen ───────────────────────────────────
+// ─── ThreadLoader ─────────────────────────────────────────────────────────────
 function ThreadLoader({ onDone }) {
   const [line] = useState(() => randomFrom(LOADING_LINES));
 
@@ -66,7 +66,6 @@ function ThreadLoader({ onDone }) {
         gap: "16px",
       }}
     >
-      {/* Pulsing dot */}
       <motion.div
         animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.75, 0.4] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
@@ -189,6 +188,7 @@ function useRedThread() {
     lastSeen: null,
   });
   const [connected, setConnected] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -206,7 +206,11 @@ function useRedThread() {
     });
 
     socket.on("disconnect", () => setConnected(false));
-    socket.on("threadHistory", ({ messages }) => setMessages(messages));
+
+    socket.on("threadHistory", ({ messages }) => {
+      setMessages(messages);
+      setHistoryLoaded(true);
+    });
 
     socket.on("threadMoved", ({ message }) => {
       setMessages((prev) => {
@@ -241,7 +245,7 @@ function useRedThread() {
     }).catch(() => {});
   }, []);
 
-  return { messages, otherPresence, connected, sendMessage, markSeen };
+  return { messages, otherPresence, connected, sendMessage, markSeen, historyLoaded };
 }
 
 // ─── ReplyPreview ─────────────────────────────────────────────────────────────
@@ -434,7 +438,6 @@ const MessageBubble = memo(function MessageBubble({
               lineHeight: isMine ? "1.5" : "1.35",
               color: isMine ? "#c7d2fe" : "#f1f5f9",
               margin: 0,
-              // ── TEXT PRESERVATION FIX ──
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               overflowWrap: "break-word",
@@ -563,7 +566,7 @@ function ReplyBanner({ replyingTo, onCancel }) {
 
 // ─── Thread Page ──────────────────────────────────────────────────────────────
 export default function ThreadPage() {
-  const { messages, otherPresence, connected, sendMessage, markSeen } =
+  const { messages, otherPresence, connected, sendMessage, markSeen, historyLoaded } =
     useRedThread();
   const router = useRouter();
 
@@ -572,13 +575,161 @@ export default function ThreadPage() {
   const [highlightedId, setHighlightedId] = useState(null);
 
   // ── Entrance / exit state ──
-  const [phase, setPhase] = useState("loading"); // 'loading' | 'entering' | 'open' | 'closing'
+  const [phase, setPhase] = useState("loading");
   const [exitLine] = useState(() => randomFrom(EXIT_LINES));
 
+  // ── Unread / new-messages state ───────────────────────────────────────────
+  const [firstUnreadIndex, setFirstUnreadIndex] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNewMsgsDivider, setShowNewMsgsDivider] = useState(false);
+  const [floatingUnread, setFloatingUnread] = useState(0);
+  const [showFloating, setShowFloating] = useState(false);
+
+  // ── Refs ──────────────────────────────────────────────────────────────────
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
   const messageRefs = useRef({});
+  const unreadDividerRef = useRef(null);
+  const isAtBottomRef = useRef(true);
+  const initialScrollDoneRef = useRef(false);
+  const prevMessageCountRef = useRef(0);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const getIsAtBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior = "smooth") => {
+    bottomRef.current?.scrollIntoView({ behavior });
+  }, []);
+
+  const saveLastSeen = useCallback(() => {
+    if (messages.length > 0) {
+      const lastId = messages[messages.length - 1]._id;
+      if (lastId) localStorage.setItem(LAST_SEEN_KEY, lastId);
+    }
+  }, [messages]);
+
+  // ── Save on leave ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") saveLastSeen();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      saveLastSeen();
+    };
+  }, [saveLastSeen]);
+
+  // ── Scroll listener ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const atBottom = getIsAtBottom();
+      isAtBottomRef.current = atBottom;
+
+      if (atBottom) {
+        setShowFloating(false);
+        setFloatingUnread(0);
+        if (showNewMsgsDivider) {
+          setShowNewMsgsDivider(false);
+          setFirstUnreadIndex(null);
+          setUnreadCount(0);
+          saveLastSeen();
+        }
+      }
+
+      // Remove divider when scrolled past it
+      if (showNewMsgsDivider && unreadDividerRef.current) {
+        const dividerRect = unreadDividerRef.current.getBoundingClientRect();
+        const containerRect = el.getBoundingClientRect();
+        if (dividerRect.bottom < containerRect.top) {
+          setShowNewMsgsDivider(false);
+          setFirstUnreadIndex(null);
+          setUnreadCount(0);
+          saveLastSeen();
+        }
+      }
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [getIsAtBottom, showNewMsgsDivider, saveLastSeen]);
+
+  // ── Initial scroll when history loads + phase is open ────────────────────
+  useEffect(() => {
+    if (!historyLoaded || initialScrollDoneRef.current) return;
+    if (phase !== "open") return;
+
+    const lastSeenId =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem(LAST_SEEN_KEY)
+        : null;
+
+    if (!lastSeenId || messages.length === 0) {
+      requestAnimationFrame(() => scrollToBottom("instant"));
+      initialScrollDoneRef.current = true;
+      prevMessageCountRef.current = messages.length;
+      return;
+    }
+
+    const lastSeenIdx = messages.findIndex((m) => m._id === lastSeenId);
+
+    if (lastSeenIdx === -1 || lastSeenIdx === messages.length - 1) {
+      requestAnimationFrame(() => scrollToBottom("instant"));
+    } else {
+      const firstUnread = lastSeenIdx + 1;
+      const count = messages.length - firstUnread;
+      setFirstUnreadIndex(firstUnread);
+      setUnreadCount(count);
+      setShowNewMsgsDivider(true);
+
+      requestAnimationFrame(() => {
+        if (unreadDividerRef.current) {
+          unreadDividerRef.current.scrollIntoView({
+            behavior: "instant",
+            block: "start",
+          });
+        } else {
+          scrollToBottom("instant");
+        }
+      });
+    }
+
+    initialScrollDoneRef.current = true;
+    prevMessageCountRef.current = messages.length;
+  }, [historyLoaded, phase, messages, scrollToBottom]);
+
+  // ── Handle incoming new messages after initial load ───────────────────────
+  useEffect(() => {
+    const prevCount = prevMessageCountRef.current;
+    const newCount = messages.length;
+
+    if (!initialScrollDoneRef.current || newCount <= prevCount) {
+      prevMessageCountRef.current = newCount;
+      return;
+    }
+
+    const atBottom = isAtBottomRef.current;
+    const newMsgCount = newCount - prevCount;
+
+    if (atBottom) {
+      requestAnimationFrame(() => scrollToBottom("smooth"));
+      setShowFloating(false);
+      setFloatingUnread(0);
+    } else {
+      setFloatingUnread((prev) => prev + newMsgCount);
+      setShowFloating(true);
+    }
+
+    prevMessageCountRef.current = newCount;
+  }, [messages, scrollToBottom]);
 
   // Loader → entering → open
   const handleLoaderDone = useCallback(() => {
@@ -586,38 +737,31 @@ export default function ThreadPage() {
     setTimeout(() => setPhase("open"), 400);
   }, []);
 
-  // Close with exit animation
   const handleClose = useCallback(() => {
+    saveLastSeen();
     setPhase("closing");
     setTimeout(() => router.back(), 600);
-  }, [router]);
+  }, [router, saveLastSeen]);
 
-  // Auto-scroll only if near bottom
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (nearBottom) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
-
-  useEffect(() => {
-    markSeen();
-  }, [markSeen]);
-
-  // ── Textarea auto-expand ──
+  // ── Textarea auto-expand ──────────────────────────────────────────────────
   const handleInputChange = (e) => {
     setInput(e.target.value);
     const ta = e.target;
     ta.style.height = "auto";
-    // Max ~6 lines ≈ 144px
     ta.style.height = Math.min(ta.scrollHeight, 144) + "px";
   };
 
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
+
+    // Clear divider + floating on send
+    setShowNewMsgsDivider(false);
+    setFirstUnreadIndex(null);
+    setUnreadCount(0);
+    setShowFloating(false);
+    setFloatingUnread(0);
+
     sendMessage(text, replyingTo);
     setInput("");
     setReplyingTo(null);
@@ -625,10 +769,7 @@ export default function ThreadPage() {
       inputRef.current.style.height = "auto";
       inputRef.current.focus();
     }
-    setTimeout(
-      () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
-      50
-    );
+    setTimeout(() => scrollToBottom("smooth"), 50);
   };
 
   const handleKey = (e) => {
@@ -649,6 +790,20 @@ export default function ThreadPage() {
     setTimeout(() => setHighlightedId(null), 1800);
   }, []);
 
+  const handleFloatingClick = () => {
+    scrollToBottom("smooth");
+    setShowFloating(false);
+    setFloatingUnread(0);
+    setShowNewMsgsDivider(false);
+    setFirstUnreadIndex(null);
+    setUnreadCount(0);
+    saveLastSeen();
+  };
+
+  useEffect(() => {
+    markSeen();
+  }, [markSeen]);
+
   const presenceText = formatPresence(otherPresence);
   const isHere = otherPresence.status === "here";
 
@@ -659,7 +814,7 @@ export default function ThreadPage() {
         {phase === "loading" && <ThreadLoader onDone={handleLoaderDone} />}
       </AnimatePresence>
 
-      {/* ── Exit text overlay ── */}
+      {/* ── Exit overlay ── */}
       <AnimatePresence>
         {phase === "closing" && (
           <motion.div
@@ -696,7 +851,7 @@ export default function ThreadPage() {
         )}
       </AnimatePresence>
 
-      {/* ── Main chat shell — entrance + exit animation ── */}
+      {/* ── Main chat shell ── */}
       <AnimatePresence>
         {(phase === "entering" || phase === "open") && (
           <motion.div
@@ -709,7 +864,7 @@ export default function ThreadPage() {
               ease: [0.22, 1, 0.36, 1],
             }}
             className="flex flex-col h-full max-w-2xl mx-auto"
-            style={{ willChange: "transform, opacity" }}
+            style={{ willChange: "transform, opacity", position: "relative" }}
           >
             {/* ── Header ── */}
             <div
@@ -722,7 +877,6 @@ export default function ThreadPage() {
               <div
                 style={{ display: "flex", alignItems: "center", gap: "10px" }}
               >
-                {/* ── Close button ── */}
                 <motion.button
                   whileTap={{ scale: 0.88 }}
                   onClick={handleClose}
@@ -839,6 +993,7 @@ export default function ThreadPage() {
                 padding: "8px 14px 4px",
                 scrollbarWidth: "thin",
                 overscrollBehavior: "contain",
+                position: "relative",
               }}
             >
               {messages.length === 0 && (
@@ -871,9 +1026,12 @@ export default function ThreadPage() {
                   const showDivider = shouldShowDivider(messages, i);
                   const groupInfo = getGroupInfo(messages, i);
                   const isHighlighted = highlightedId === msg._id;
+                  const isFirstUnread =
+                    showNewMsgsDivider && i === firstUnreadIndex;
 
                   return (
                     <div key={msg._id || i}>
+                      {/* ── Date divider ── */}
                       {showDivider && (
                         <motion.div
                           initial={{ opacity: 0 }}
@@ -914,6 +1072,56 @@ export default function ThreadPage() {
                         </motion.div>
                       )}
 
+                      {/* ── New messages divider ── */}
+                      {isFirstUnread && (
+                        <motion.div
+                          ref={unreadDividerRef}
+                          initial={{ opacity: 0, scaleX: 0.85 }}
+                          animate={{ opacity: 1, scaleX: 1 }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            margin: "12px 0 4px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              flex: 1,
+                              height: "1px",
+                              background: "var(--brand, #6366f1)",
+                              opacity: 0.3,
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: "9px",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.12em",
+                              color: "var(--brand, #6366f1)",
+                              fontFamily: "'Outfit', sans-serif",
+                              fontWeight: 500,
+                              whiteSpace: "nowrap",
+                              padding: "2px 8px",
+                              borderRadius: "20px",
+                              background: "rgba(99,102,241,0.1)",
+                              border: "1px solid rgba(99,102,241,0.25)",
+                            }}
+                          >
+                            {unreadCount} new{" "}
+                            {unreadCount === 1 ? "message" : "messages"}
+                          </span>
+                          <div
+                            style={{
+                              flex: 1,
+                              height: "1px",
+                              background: "var(--brand, #6366f1)",
+                              opacity: 0.3,
+                            }}
+                          />
+                        </motion.div>
+                      )}
+
                       <div
                         ref={(el) => {
                           if (el) messageRefs.current[msg._id] = el;
@@ -941,6 +1149,47 @@ export default function ThreadPage() {
               </AnimatePresence>
               <div ref={bottomRef} style={{ height: "4px" }} />
             </div>
+
+            {/* ── Floating "↓ N new messages" pill ── */}
+            <AnimatePresence>
+              {showFloating && floatingUnread > 0 && (
+                <motion.button
+                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={handleFloatingClick}
+                  style={{
+                    position: "absolute",
+                    bottom: "80px",
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    zIndex: 30,
+                    background: "var(--brand, #6366f1)",
+                    border: "none",
+                    borderRadius: "20px",
+                    padding: "6px 14px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    boxShadow: "0 4px 20px rgba(99,102,241,0.4)",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "white",
+                      fontWeight: 600,
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                  >
+                    ↓ {floatingUnread} new{" "}
+                    {floatingUnread === 1 ? "message" : "messages"}
+                  </span>
+                </motion.button>
+              )}
+            </AnimatePresence>
 
             {/* ── Input ── */}
             <div
@@ -990,13 +1239,10 @@ export default function ThreadPage() {
                     caretColor: "#c7d2fe",
                     lineHeight: "1.5",
                     padding: "4px 0",
-                    // Auto-expand: max ~6 lines
                     maxHeight: "144px",
                     overflowY: "auto",
                     scrollbarWidth: "none",
-                    // Smooth height growth
                     transition: "height 0.1s ease",
-                    // Preserve typed formatting
                     whiteSpace: "pre-wrap",
                   }}
                 />
