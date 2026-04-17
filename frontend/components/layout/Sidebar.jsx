@@ -11,6 +11,7 @@ import {
 import clsx from "clsx";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui";
+import { useThreadNotifications } from "@/context/ThreadNotificationContext";
 
 const ICON_MAP = {
   LayoutDashboard, CheckSquare, Folder, Zap, Lightbulb,
@@ -18,23 +19,13 @@ const ICON_MAP = {
   Brain, Compass, BarChart2, Trophy, Bell,
 };
 
-// Custom Thread icon (inline SVG as component)
 function ThreadIcon({ size = 16, className }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      className={className}
-    >
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
       <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.5" />
       <path
         d="M8 1v2M8 13v2M1 8h2M13 8h2"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        opacity="0.5"
+        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"
       />
     </svg>
   );
@@ -59,14 +50,18 @@ const NAV_ITEMS = [
   { href: "/ai",            label: "AI Assistant",  icon: "Sparkles" },
 ];
 
-// ── Shared nav content ────────────────────────────────────────────────────────
 function NavContent({ onNavClick }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { unreadCount, resetUnread } = useThreadNotifications();
+
+  const handleThreadClick = () => {
+    resetUnread();
+    onNavClick?.();
+  };
 
   return (
     <div className="flex flex-col h-full">
-      {/* Logo */}
       <div className="px-5 py-5 border-b border-surface-3 shrink-0">
         <span className="text-xl font-bold tracking-tight">
           <span className="text-brand">Sahil</span>
@@ -77,12 +72,11 @@ function NavContent({ onNavClick }) {
         </p>
       </div>
 
-      {/* Nav links */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-        {/* ── Red Thread (special item, always at top of nav) ───────────── */}
+        {/* ── Red Thread ───────────────────────────────────────────────────── */}
         <Link
           href="/thread"
-          onClick={onNavClick}
+          onClick={handleThreadClick}
           className={clsx(
             "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group mb-2",
             pathname === "/thread"
@@ -93,13 +87,27 @@ function NavContent({ onNavClick }) {
           <ThreadIcon
             size={16}
             className={clsx(
-              pathname === "/thread"
-                ? "text-red-400"
-                : "text-red-500/40 group-hover:text-red-400/70"
+              pathname === "/thread" ? "text-red-400" : "text-red-500/40 group-hover:text-red-400/70"
             )}
           />
-          <span className="flex-1" style={{ fontFamily: "'Caveat', cursive", fontSize: '1.05rem', letterSpacing: '0.01em' }}>The Red Thread</span>
-          {pathname !== "/thread" && (
+          <span
+            className="flex-1"
+            style={{ fontFamily: "'Caveat', cursive", fontSize: "1.05rem", letterSpacing: "0.01em" }}
+          >
+            The Red Thread
+          </span>
+
+          {/* Unread badge */}
+          {pathname !== "/thread" && unreadCount > 0 && (
+            <span
+              id="badge"
+              className="text-[10px] bg-red-500/20 text-red-400 px-1.5 rounded-full font-bold min-w-[20px] text-center"
+              style={{ paddingTop: "3px", paddingBottom: "3px", lineHeight: 1 }}
+            >
+              ({unreadCount})
+            </span>
+          )}
+          {pathname !== "/thread" && unreadCount === 0 && (
             <span className="text-[10px] bg-red-500/10 text-red-400/70 px-1.5 py-0.5 rounded font-semibold">
               ∞
             </span>
@@ -114,7 +122,6 @@ function NavContent({ onNavClick }) {
           const Icon   = ICON_MAP[icon];
           const active = pathname === href || pathname.startsWith(href + "/");
           const isAI   = href === "/ai";
-
           return (
             <Link
               key={href}
@@ -122,9 +129,7 @@ function NavContent({ onNavClick }) {
               onClick={onNavClick}
               className={clsx(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group",
-                active
-                  ? "bg-brand/15 text-brand"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-surface-2",
+                active ? "bg-brand/15 text-brand" : "text-slate-400 hover:text-slate-100 hover:bg-surface-2",
                 isAI && !active && "border border-dashed border-surface-3 mt-2"
               )}
             >
@@ -137,9 +142,7 @@ function NavContent({ onNavClick }) {
               />
               <span className="flex-1">{label}</span>
               {isAI && !active && (
-                <span className="text-[10px] bg-brand/20 text-brand px-1.5 py-0.5 rounded font-semibold">
-                  AI
-                </span>
+                <span className="text-[10px] bg-brand/20 text-brand px-1.5 py-0.5 rounded font-semibold">AI</span>
               )}
               {active && <ChevronRight size={12} className="text-brand opacity-60" />}
             </Link>
@@ -147,7 +150,6 @@ function NavContent({ onNavClick }) {
         })}
       </nav>
 
-      {/* User + Logout */}
       <div className="border-t border-surface-3 px-3 py-3 shrink-0">
         <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
           <Avatar name={user?.name || ""} size="sm" />
@@ -168,7 +170,6 @@ function NavContent({ onNavClick }) {
   );
 }
 
-// ── Desktop Sidebar ───────────────────────────────────────────────────────────
 function DesktopSidebar() {
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 hidden md:flex flex-col bg-surface-1 border-r border-surface-3">
@@ -177,15 +178,11 @@ function DesktopSidebar() {
   );
 }
 
-// ── Mobile Drawer ─────────────────────────────────────────────────────────────
 function MobileDrawer({ open, onClose }) {
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden" onClick={onClose} />
       )}
       <aside
         className={clsx(
@@ -219,7 +216,6 @@ export function MobileMenuButton({ onClick }) {
 
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-
   return (
     <>
       <DesktopSidebar />

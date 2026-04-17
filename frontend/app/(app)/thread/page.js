@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
 import { format, isToday, isYesterday } from "date-fns";
 import { useRouter } from "next/navigation";
+import ThreadPushPrompt from "@/components/notifications/ThreadPushPrompt";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const THREAD_SERVER =
@@ -1232,7 +1233,9 @@ export default function ThreadPage() {
                 />
               </div>
             </div>
-
+            
+            {/* ── Push prompt ── */}
+            <ThreadPushPrompt />
             {/* ── Messages ── */}
             <div
               ref={scrollRef}

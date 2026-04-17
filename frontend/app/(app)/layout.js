@@ -9,32 +9,36 @@ import { Spinner } from "@/components/ui";
 import { AchievementProvider } from "@/hooks/useAchievements";
 import { AchievementPopupQueue } from "@/components/achievements/AchievementPopup";
 import { NotificationProvider } from "@/context/NotificationContext";
-
+import { ThreadNotificationProvider } from "@/context/ThreadNotificationContext";
 
 function AppShell({ children }) {
+  const router = useRouter();
   const [queue, setQueue] = useState([]);
 
-  const handleUnlock = (achievement) => {
-    setQueue((q) => [...q, achievement]);
-  };
+  const handleUnlock = (achievement) => setQueue((q) => [...q, achievement]);
+  const handleDismiss = (id) => setQueue((q) => q.filter((a) => a._id !== id));
 
-  const handleDismiss = (id) => {
-    setQueue((q) => q.filter((a) => a._id !== id));
-  };
+  // Toast click → navigate to /thread
+  useEffect(() => {
+    const handler = () => router.push("/thread");
+    window.addEventListener("thread:open", handler);
+    return () => window.removeEventListener("thread:open", handler);
+  }, [router]);
 
   return (
     <NotificationProvider>
-      <AchievementProvider onUnlock={handleUnlock}>
-        <div className="flex h-screen bg-surface overflow-hidden">
-          <Sidebar />
-          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-            <Topbar />
-            <main className="flex-1 overflow-y-auto">{children}</main>
+      <ThreadNotificationProvider>
+        <AchievementProvider onUnlock={handleUnlock}>
+          <div className="flex h-screen bg-surface overflow-hidden">
+            <Sidebar />
+            <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+              <Topbar />
+              <main className="flex-1 overflow-y-auto">{children}</main>
+            </div>
+            <AchievementPopupQueue queue={queue} onDismiss={handleDismiss} />
           </div>
-          {/* Global popup — on top of everything, on every page */}
-          <AchievementPopupQueue queue={queue} onDismiss={handleDismiss} />
-        </div>
-      </AchievementProvider>
+        </AchievementProvider>
+      </ThreadNotificationProvider>
     </NotificationProvider>
   );
 }
