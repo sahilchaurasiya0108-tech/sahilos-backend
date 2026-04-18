@@ -167,8 +167,13 @@ export function ThreadNotificationProvider({ children }) {
     });
 
     socket.on("connect", () => {
-      socket.emit("joinThread", { userId: USER_ID });
-      socket.emit("pullThread", { userId: USER_ID });
+      // Use watchThread (NOT joinThread) so this background notification socket
+      // is never added to connectedUsers on the server. If joinThread were used
+      // here, Sahil would always appear "online" to the server from the layout,
+      // causing every message Gauri sends to instantly get seen:true (double tick)
+      // even before he's opened the thread — and his presence would show as
+      // "here" even when he's on a completely different page.
+      socket.emit("watchThread", { userId: USER_ID });
     });
 
     // Prime seenIds — no toasts for history
