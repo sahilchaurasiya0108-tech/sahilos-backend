@@ -14,6 +14,7 @@ import { PROJECT_STATUSES, PROJECT_COLORS, PROJECT_CATEGORIES } from "@/lib/cons
 import api from "@/lib/api";
 import clsx from "clsx";
 import NooriCard, { NooriDrawer } from "@/components/projects/NooriCard";
+import NooriEditModal from "@/components/projects/NooriEditModal";
 
 const statusMeta = (value) => PROJECT_STATUSES.find((s) => s.value === value);
 
@@ -480,17 +481,25 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
-  const [modalOpen, setModal]     = useState(false);
-  const [editing, setEditing]     = useState(null);
-  const [viewingId, setViewingId] = useState(null);
+  const [modalOpen, setModal]           = useState(false);
+  const [nooriModalOpen, setNooriModal] = useState(false);
+  const [editing, setEditing]           = useState(null);
+  const [viewingId, setViewingId]       = useState(null);
   const [viewingColor, setViewingColor] = useState(null);
   const [viewingIsNoori, setViewingIsNoori] = useState(false);
   const [activeCategory, setActiveCategory] = useState(null);
 
   const { projects, loading, createProject, updateProject, toggleMilestone, deleteProject } = useProjects();
 
-  const openEdit   = (p) => { setEditing(p); setModal(true); };
-  const openCreate = () =>  { setEditing(null); setModal(true); };
+  const openEdit = (p) => {
+    setEditing(p);
+    if (p?.title?.toLowerCase().startsWith("noori")) {
+      setNooriModal(true);
+    } else {
+      setModal(true);
+    }
+  };
+  const openCreate = () => { setEditing(null); setModal(true); };
   const openView   = (p) => { setViewingId(p._id); setViewingColor(p.color); setViewingIsNoori(p.title?.toLowerCase().startsWith("noori") || false); };
 
   const handleSave = async (payload) => {
@@ -584,6 +593,7 @@ export default function ProjectsPage() {
       )}
 
       <ProjectModal open={modalOpen} onClose={() => setModal(false)} onSave={handleSave} initial={editing} />
+      <NooriEditModal open={nooriModalOpen} onClose={() => setNooriModal(false)} onSave={handleSave} initial={editing} />
     </PageWrapper>
   );
 }
