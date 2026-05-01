@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const KNOWLEDGE_CATEGORIES = ["book", "movie", "web_series", "anime", "quote", "person", "article", "other"];
 
+// Accent colours the user can pick to personalise a card
+const CARD_ACCENT_COLOURS = [
+  "default", "rose", "amber", "emerald", "sky", "violet", "pink", "orange",
+];
+
 const knowledgeSchema = new mongoose.Schema(
   {
     userId: {
@@ -35,6 +40,20 @@ const knowledgeSchema = new mongoose.Schema(
       enum: { values: ["want", "in-progress", "done"], message: "Invalid status" },
       default: "want",
     },
+
+    // ── Favourites ─────────────────────────────────────────────────────────
+    isFavourite: { type: Boolean, default: false, index: true },
+
+    // ── Card customisation ─────────────────────────────────────────────────
+    cardStyle: {
+      // A single emoji or short label shown prominently on the card
+      coverEmoji:   { type: String, default: "", trim: true, maxlength: 8 },
+      // Accent colour key (maps to a Tailwind palette on the frontend)
+      accentColour: { type: String, enum: CARD_ACCENT_COLOURS, default: "default" },
+      // Layout variant: "default" | "compact" | "poster"
+      displayStyle: { type: String, enum: ["default", "compact", "poster"], default: "default" },
+    },
+
     isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true }
@@ -42,6 +61,8 @@ const knowledgeSchema = new mongoose.Schema(
 
 knowledgeSchema.index({ userId: 1, isDeleted: 1, category: 1 });
 knowledgeSchema.index({ userId: 1, isDeleted: 1, createdAt: -1 });
+knowledgeSchema.index({ userId: 1, isDeleted: 1, isFavourite: 1 });
 
 module.exports = mongoose.model("Knowledge", knowledgeSchema);
 module.exports.KNOWLEDGE_CATEGORIES = KNOWLEDGE_CATEGORIES;
+module.exports.CARD_ACCENT_COLOURS  = CARD_ACCENT_COLOURS;

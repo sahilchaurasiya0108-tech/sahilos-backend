@@ -4,15 +4,12 @@ import api from "@/lib/api";
 import toast from "react-hot-toast";
 
 export function useKnowledge(params = {}) {
-  const [entries, setEntries]       = useState([]);
-  const [pagination, setPagination] = useState(null);
-  const [loading, setLoading]       = useState(true);
+  const [entries, setEntries]         = useState([]);
+  const [pagination, setPagination]   = useState(null);
+  const [loading, setLoading]         = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage]             = useState(1);
+  const [page, setPage]               = useState(1);
 
-  // Single fetch function — mirrors the activity page pattern.
-  // `p`      = which page to fetch
-  // `append` = true for load-more (append), false for a fresh filter fetch (replace)
   const fetchEntries = useCallback(async (p = 1, append = false, overrideParams) => {
     const activeParams = overrideParams ?? params;
     try {
@@ -33,7 +30,6 @@ export function useKnowledge(params = {}) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(params)]);
 
-  // Reset and refetch from page 1 whenever filters change
   useEffect(() => {
     setPage(1);
     setEntries([]);
@@ -41,7 +37,6 @@ export function useKnowledge(params = {}) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchEntries]);
 
-  // Load next page and APPEND — never resets the list
   const loadMore = useCallback(() => {
     const next = page + 1;
     setPage(next);
@@ -76,16 +71,22 @@ export function useKnowledge(params = {}) {
 }
 
 export function useKnowledgeCounts() {
-  const [counts, setCounts]   = useState({});
-  const [total, setTotal]     = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [counts, setCounts]             = useState({});
+  const [total, setTotal]               = useState(0);
+  const [favouriteCount, setFavCount]   = useState(0);
+  const [loading, setLoading]           = useState(true);
 
   const fetch = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get("/knowledge/counts");
-      setCounts(res.data.data.counts);
+      setCounts({
+        ...res.data.data.counts,
+        // Expose favourite count in the same map for convenience in the sidebar
+        _favouriteCount: res.data.data.favouriteCount,
+      });
       setTotal(res.data.data.total);
+      setFavCount(res.data.data.favouriteCount);
     } finally {
       setLoading(false);
     }
@@ -93,5 +94,5 @@ export function useKnowledgeCounts() {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  return { counts, total, loading, refetch: fetch };
+  return { counts, total, favouriteCount, loading, refetch: fetch };
 }

@@ -6,25 +6,27 @@ const { evaluateAchievements } = require("../utils/achievementEngine");
 
 const getCounts = asyncHandler(async (req, res) => {
   const base = { userId: req.user._id, isDeleted: false };
-  const [total, grouped] = await Promise.all([
+  const [total, grouped, favouriteCount] = await Promise.all([
     Knowledge.countDocuments(base),
     Knowledge.aggregate([
       { $match: base },
       { $group: { _id: "$category", count: { $sum: 1 } } },
     ]),
+    Knowledge.countDocuments({ ...base, isFavourite: true }),
   ]);
   const counts = grouped.reduce((acc, { _id, count }) => { acc[_id] = count; return acc; }, {});
-  res.json({ success: true, data: { total, counts } });
+  res.json({ success: true, data: { total, counts, favouriteCount } });
 });
 
 const getEntries = asyncHandler(async (req, res) => {
   const { skip, limit, getPaginationMeta } = getPagination(req.query);
-  const { category, search, tag } = req.query;
+  const { category, search, tag, favourites } = req.query;
 
   const filter = { userId: req.user._id, isDeleted: false };
-  if (category) filter.category = category;
-  if (tag)      filter.tags = { $in: [tag] };
-  if (search)   filter.$or = [
+  if (category)          filter.category = category;
+  if (tag)               filter.tags = { $in: [tag] };
+  if (favourites === "1") filter.isFavourite = true;
+  if (search)            filter.$or = [
     { title:   { $regex: search, $options: "i" } },
     { content: { $regex: search, $options: "i" } },
     { tags:    { $in: [new RegExp(search, "i")] } },
@@ -47,7 +49,7 @@ const getEntry = asyncHandler(async (req, res) => {
 });
 
 const createEntry = asyncHandler(async (req, res) => {
-  const { title, category, content, tags, author, rating, status } = req.body;
+  const { title, category, content, tags, author, rating, status, isFavourite, cardStyle } = req.body;
   if (!title || !category) {
     res.statusCode = 400;
     throw new Error("Title and category are required");
@@ -58,6 +60,8 @@ const createEntry = asyncHandler(async (req, res) => {
     title, category, content,
     tags: tags || [],
     author, rating, status,
+    isFavourite: isFavourite || false,
+    cardStyle: cardStyle || {},
   });
 
   logActivity(req.user._id, "knowledge_added", entry._id, entry.title, { category });
@@ -71,12 +75,29 @@ const updateEntry = asyncHandler(async (req, res) => {
   });
   if (!entry) { res.statusCode = 404; throw new Error("Entry not found"); }
 
-  ["title", "category", "content", "tags", "author", "rating", "status"].forEach((f) => {
+  ["title", "category", "content", "tags", "author", "rating", "status", "isFavourite"].forEach((f) => {
     if (req.body[f] !== undefined) entry[f] = req.body[f];
   });
 
+  // Merge cardStyle sub-fields instead of replacing the whole object
+  if (req.body.cardStyle && typeof req.body.cardStyle === "object") {
+    entry.cardStyle = { ...((entry.cardStyle || {}).toObject?.() ?? entry.cardStyle ?? {}), ...req.body.cardStyle };
+  }
+
   await entry.save();
   res.json({ success: true, data: entry });
+});
+
+// Dedicated favourite toggle — PATCH /knowledge/:id/favourite
+const toggleFavourite = asyncHandler(async (req, res) => {
+  const entry = await Knowledge.findOne({
+    _id: req.params.id, userId: req.user._id, isDeleted: false,
+  });
+  if (!entry) { res.statusCode = 404; throw new Error("Entry not found"); }
+
+  entry.isFavourite = !entry.isFavourite;
+  await entry.save();
+  res.json({ success: true, data: { isFavourite: entry.isFavourite } });
 });
 
 const deleteEntry = asyncHandler(async (req, res) => {
@@ -89,4 +110,4 @@ const deleteEntry = asyncHandler(async (req, res) => {
   res.json({ success: true, message: "Entry deleted" });
 });
 
-module.exports = { getCounts, getEntries, getEntry, createEntry, updateEntry, deleteEntry };
+module.exports = { getCounts, getEntries, getEntry, createEntry, updateEntry, deleteEntry, toggleFavourite };
