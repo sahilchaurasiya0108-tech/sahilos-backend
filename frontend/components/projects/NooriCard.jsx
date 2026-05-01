@@ -1,10 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  motion, AnimatePresence,
-  useMotionValue, useSpring,
-} from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Edit2, Trash2, GitBranch, Globe,
   CheckCircle, Circle, ChevronRight,
@@ -212,6 +209,119 @@ function DLabel({ children }) {
   );
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOORI LINKED TASKS — styled for the Noori drawer
+// ─────────────────────────────────────────────────────────────────────────────
+const NOORI_TASK_STATUS = {
+  "todo":        { label: "to do",       color: "rgba(221,160,221,0.50)" },
+  "in-progress": { label: "in progress", color: "rgb(192,168,232)" },
+  "review":      { label: "review",      color: "rgb(232,192,122)" },
+  "done":        { label: "done",        color: "rgba(221,160,221,0.35)" },
+};
+
+function NooriLinkedTasks({ projectId }) {
+  const [tasks,    setTasks]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [expanded, setExpanded] = useState(true);
+  const [error,    setError]    = useState(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    setLoading(true);
+    api.get(`/projects/${projectId}/tasks`)
+      .then((r) => { setTasks(r.data.data); setError(null); })
+      .catch(() => setError("could not load tasks"))
+      .finally(() => setLoading(false));
+  }, [projectId]);
+
+  const done = tasks.filter((t) => t.status === "done").length;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <DLabel>Linked Tasks {!loading && `(${done}/${tasks.length})`}</DLabel>
+        {tasks.length > 0 && (
+          <button
+            onClick={() => setExpanded((e) => !e)}
+            style={{ fontFamily: "'Times New Roman', serif", fontStyle: "italic", fontSize: "0.65rem", color: "rgba(221,160,221,0.45)", letterSpacing: "0.08em" }}
+          >
+            {expanded ? "collapse ↑" : "expand ↓"}
+          </button>
+        )}
+      </div>
+
+      {loading && (
+        <p style={{ fontFamily: "'Caveat', cursive", fontSize: "0.9rem", color: "rgba(221,160,221,0.45)", fontStyle: "italic" }}>
+          gathering threads…
+        </p>
+      )}
+
+      {error && (
+        <p style={{ fontFamily: "'Caveat', cursive", fontSize: "0.9rem", color: "rgba(221,160,221,0.45)", fontStyle: "italic" }}>
+          {error}
+        </p>
+      )}
+
+      {!loading && !error && tasks.length === 0 && (
+        <p style={{ fontFamily: "'Times New Roman', serif", fontStyle: "italic", fontSize: "0.78rem", color: "rgba(221,160,221,0.35)" }}>
+          no threads woven yet.
+        </p>
+      )}
+
+      {!loading && !error && tasks.length > 0 && expanded && (
+        <div className="space-y-1.5">
+          {tasks.map((task) => {
+            const sm = NOORI_TASK_STATUS[task.status] || NOORI_TASK_STATUS["todo"];
+            const isDone = task.status === "done";
+            return (
+              <div key={task._id}
+                className="flex items-start gap-3 rounded-2xl px-4 py-3"
+                style={{ background: "rgba(221,160,221,0.03)", border: "1px solid rgba(221,160,221,0.08)" }}
+              >
+                <div className="mt-0.5 shrink-0">
+                  {isDone
+                    ? <CheckCircle size={13} style={{ color: "rgba(221,160,221,0.55)" }} />
+                    : <Circle      size={13} style={{ color: "rgba(221,160,221,0.22)" }} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={isDone ? "line-through" : ""}
+                    style={{
+                      fontFamily: "'Caveat', cursive",
+                      fontSize: "0.98rem",
+                      color: isDone ? "rgba(221,160,221,0.35)" : "rgb(242,196,232)",
+                      lineHeight: 1.4,
+                    }}>
+                    {task.title}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span style={{
+                      fontFamily: "'Times New Roman', serif",
+                      fontStyle: "italic",
+                      fontSize: "0.62rem",
+                      letterSpacing: "0.1em",
+                      color: sm.color,
+                    }}>
+                      {sm.label}
+                    </span>
+                    {task.dueDate && (
+                      <span className="flex items-center gap-1"
+                        style={{ fontFamily: "'Times New Roman', serif", fontStyle: "italic", fontSize: "0.62rem", color: "rgba(221,160,221,0.40)" }}>
+                        <Calendar size={9} />
+                        {new Date(task.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // NOORI DRAWER
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,19 +390,18 @@ export function NooriDrawer({ projectId, onClose, onEdit, onDelete, onMilestoneT
         <div className="absolute bottom-0 -left-12 w-56 h-56 pointer-events-none rounded-full"
           style={{ background: "radial-gradient(circle, rgba(232,192,122,0.06) 0%, transparent 65%)", filter: "blur(40px)" }} />
 
-        {/* Floating micro-dots — decorative only */}
+        {/* Static micro-dots — decorative */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           {[...Array(10)].map((_, i) => (
-            <motion.div key={i}
+            <div key={i}
               className="absolute rounded-full"
               style={{
                 width: 1.2, height: 1.2,
                 background: "rgb(242,196,232)",
+                opacity: 0.08,
                 left: `${10 + i * 8.5}%`,
                 top: `${6 + (i % 4) * 20}%`,
               }}
-              animate={{ opacity: [0.04, 0.20, 0.04] }}
-              transition={{ duration: 3.5 + i * 0.4, repeat: Infinity, delay: i * 0.35, ease: "easeInOut" }}
             />
           ))}
         </div>
@@ -563,26 +672,10 @@ export function NooriDrawer({ projectId, onClose, onEdit, onDelete, onMilestoneT
               </DSection>
             )}
 
-            {/* ── Task breakdown ── */}
-            {totalTasks > 0 && (
-              <DSection>
-                <DLabel>Tasks by status</DLabel>
-                <div className="space-y-1.5">
-                  {Object.entries(taskCounts).map(([st, count]) => (
-                    <div key={st} className="flex items-center justify-between rounded-xl px-3 py-2.5"
-                      style={{ background: "rgba(221,160,221,0.04)", border: "1px solid rgba(221,160,221,0.08)" }}>
-                      <span className="capitalize"
-                        style={{ fontFamily: "'Caveat', cursive", fontSize: "0.95rem", color: "rgb(221,160,221)" }}>
-                        {st.replace(/-/g, " ")}
-                      </span>
-                      <span style={{ fontFamily: "'Dancing Script', cursive", fontSize: "1.1rem", fontWeight: 600, color: "rgb(232,192,122)" }}>
-                        {count}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </DSection>
-            )}
+            {/* ── Linked Tasks — full list ── */}
+            <DSection>
+              <NooriLinkedTasks projectId={projectId} />
+            </DSection>
 
             {/* ── Notes ── */}
             {project.notes && (
@@ -641,7 +734,7 @@ export function NooriDrawer({ projectId, onClose, onEdit, onDelete, onMilestoneT
 // ─────────────────────────────────────────────────────────────────────────────
 // NOORI CARD — the breathing tile
 // ─────────────────────────────────────────────────────────────────────────────
-export default function NooriCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
+export default function NooriCard({ project, onView, onEdit, onDelete, onMilestoneToggle, onPin }) {
   const status = statusMeta(project.status);
   const done   = project.milestones?.filter((m) => m.done).length || 0;
 
@@ -655,24 +748,14 @@ export default function NooriCard({ project, onView, onEdit, onDelete, onMilesto
   const glowRef  = useRef(null);
   const touchRef = useRef(null);
 
-  // Spring-tracked cursor glow
-  const rawX  = useMotionValue(0.5);
-  const rawY  = useMotionValue(0.5);
-  const glowX = useSpring(rawX, { stiffness: 80, damping: 20 });
-  const glowY = useSpring(rawY, { stiffness: 80, damping: 20 });
+  // Lightweight glow: track mouse pos in a ref, update DOM directly on mousemove
+  const glowPos = useRef({ x: 50, y: 50 });
 
-  const writeGlow = useCallback(() => {
+  const updateGlowCSS = useCallback(() => {
     if (!glowRef.current) return;
-    const x = glowX.get() * 100;
-    const y = glowY.get() * 100;
+    const { x, y } = glowPos.current;
     glowRef.current.style.background =
       `radial-gradient(ellipse 68% 52% at ${x}% ${y}%, rgba(124,45,158,0.22) 0%, rgba(232,192,122,0.06) 50%, transparent 70%)`;
-  }, [glowX, glowY]);
-
-  useEffect(() => {
-    const ux = glowX.on("change", writeGlow);
-    const uy = glowY.on("change", writeGlow);
-    return () => { ux(); uy(); };
   }, []);
 
   const spawnFloaters = () => {
@@ -697,25 +780,31 @@ export default function NooriCard({ project, onView, onEdit, onDelete, onMilesto
     spawnFloaters();
     const rect = cardRef.current?.getBoundingClientRect();
     if (rect && clientX !== undefined) {
-      rawX.set((clientX - rect.left) / rect.width);
-      rawY.set((clientY - rect.top)  / rect.height);
+      glowPos.current = {
+        x: ((clientX - rect.left) / rect.width) * 100,
+        y: ((clientY - rect.top) / rect.height) * 100,
+      };
+      updateGlowCSS();
     }
     if (soundReady) playSingingBowl();
-  }, [soundReady]);
+  }, [soundReady, updateGlowCSS]);
 
   const deactivate = useCallback(() => {
     setActive(false);
-    rawX.set(0.5); rawY.set(0.5);
+    glowPos.current = { x: 50, y: 50 };
   }, []);
 
-  const onMouseEnter = (e) => activate(e.clientX, e.clientY);
-  const onMouseLeave = () => deactivate();
+  const onMouseEnter = useCallback((e) => activate(e.clientX, e.clientY), [activate]);
+  const onMouseLeave = useCallback(() => deactivate(), [deactivate]);
   const onMouseMove  = useCallback((e) => {
     const rect = cardRef.current?.getBoundingClientRect();
     if (!rect) return;
-    rawX.set((e.clientX - rect.left) / rect.width);
-    rawY.set((e.clientY - rect.top)  / rect.height);
-  }, []);
+    glowPos.current = {
+      x: ((e.clientX - rect.left) / rect.width) * 100,
+      y: ((e.clientY - rect.top) / rect.height) * 100,
+    };
+    updateGlowCSS();
+  }, [updateGlowCSS]);
 
   const onTouchStart = (e) => {
     const t = e.touches[0];
@@ -735,21 +824,12 @@ export default function NooriCard({ project, onView, onEdit, onDelete, onMilesto
     <motion.div
       ref={cardRef}
       // ── BREATHING animation — scale AND subtle box-shadow pulse ──
-      animate={active ? { scale: 1.016 } : {
-        scale: [1, 1.008, 1.003, 1.009, 1],
-        boxShadow: [
-          "0 0 0 1px rgba(221,160,221,0.03), 0 4px 24px rgba(0,0,0,0.50)",
-          "0 0 0 1px rgba(221,160,221,0.07), 0 6px 32px rgba(124,45,158,0.12)",
-          "0 0 0 1px rgba(221,160,221,0.04), 0 4px 28px rgba(0,0,0,0.48)",
-          "0 0 0 1px rgba(221,160,221,0.08), 0 8px 36px rgba(124,45,158,0.14)",
-          "0 0 0 1px rgba(221,160,221,0.03), 0 4px 24px rgba(0,0,0,0.50)",
-        ],
-      }}
+      animate={active ? { scale: 1.016 } : { scale: [1, 1.006, 1] }}
       transition={active
         ? { duration: 0.22, ease: "easeOut" }
-        : { duration: 7, repeat: Infinity, repeatType: "loop", ease: "easeInOut" }
+        : { duration: 8, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }
       }
-      className="relative overflow-hidden cursor-pointer rounded-2xl flex flex-col gap-3.5 p-5 group select-none"
+      className="relative overflow-hidden cursor-pointer rounded-2xl flex flex-col gap-3.5 p-5 group select-none h-full"
       style={{
         background: "linear-gradient(155deg, #180d1c 0%, #160a1a 55%, #0d0810 100%)",
         border: active ? "1px solid rgba(221,160,221,0.28)" : "1px solid rgba(221,160,221,0.10)",
@@ -850,6 +930,45 @@ export default function NooriCard({ project, onView, onEdit, onDelete, onMilesto
               style={{ color: "rgba(221,160,221,0.28)", fontFamily: "'Caveat', cursive" }}>
               tap again to open
             </p>
+
+            {/* Pin button — lives inside the overlay so it's always reachable */}
+            {onPin && (
+              <motion.button
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.18, duration: 0.35 }}
+                onClick={(e) => { e.stopPropagation(); onPin(project._id); }}
+                className="absolute bottom-3.5 left-4 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl pointer-events-auto transition-all"
+                style={{
+                  background: project.pinned
+                    ? "rgba(232,192,122,0.12)"
+                    : "rgba(221,160,221,0.06)",
+                  border: project.pinned
+                    ? "1px solid rgba(232,192,122,0.30)"
+                    : "1px solid rgba(221,160,221,0.14)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = project.pinned ? "rgba(232,192,122,0.18)" : "rgba(221,160,221,0.12)";
+                  e.currentTarget.style.borderColor = project.pinned ? "rgba(232,192,122,0.45)" : "rgba(221,160,221,0.28)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = project.pinned ? "rgba(232,192,122,0.12)" : "rgba(221,160,221,0.06)";
+                  e.currentTarget.style.borderColor = project.pinned ? "rgba(232,192,122,0.30)" : "rgba(221,160,221,0.14)";
+                }}
+                title={project.pinned ? "Unpin" : "Pin to top"}
+              >
+                <span style={{ fontSize: "0.7rem" }}>{project.pinned ? "✦" : "✧"}</span>
+                <span style={{
+                  fontFamily: "'Times New Roman', Times, serif",
+                  fontStyle: "italic",
+                  fontSize: "0.62rem",
+                  letterSpacing: "0.12em",
+                  color: project.pinned ? "rgba(232,192,122,0.85)" : "rgba(221,160,221,0.55)",
+                }}>
+                  {project.pinned ? "pinned" : "pin"}
+                </span>
+              </motion.button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

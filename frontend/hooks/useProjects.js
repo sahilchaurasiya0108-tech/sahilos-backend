@@ -62,9 +62,39 @@ export function useProjects(params = {}) {
     toast.success("Project deleted");
   }, []);
 
+  const pinProject = useCallback(async (id) => {
+    const res = await api.patch(`/projects/${id}/pin`);
+    setProjects((prev) => {
+      const updated = prev.map((p) => (p._id === id ? res.data.data : p));
+      // Sort: pinned first by pinOrder, then by createdAt desc
+      return updated.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        if (a.pinned && b.pinned) return a.pinOrder - b.pinOrder;
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+    });
+    return res.data.data;
+  }, []);
+
+  const reorderPins = useCallback(async (orderedIds) => {
+    await api.patch("/projects/reorder-pins", { orderedIds });
+    setProjects((prev) => {
+      const orderMap = {};
+      orderedIds.forEach((id, idx) => { orderMap[id] = idx; });
+      return [...prev].sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        if (a.pinned && b.pinned) return (orderMap[a._id] ?? 99) - (orderMap[b._id] ?? 99);
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+    });
+  }, []);
+
   return {
     projects, pagination, loading, error,
     fetchProjects, createProject, updateProject, toggleMilestone, deleteProject,
+    pinProject, reorderPins,
   };
 }
 

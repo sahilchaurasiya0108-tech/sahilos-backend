@@ -30,7 +30,7 @@ const getProjects = asyncHandler(async (req, res) => {
   if (req.query.category) filter.categories = req.query.category;
 
   const [projects, total] = await Promise.all([
-    Project.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Project.find(filter).sort({ pinned: -1, pinOrder: 1, createdAt: -1 }).skip(skip).limit(limit).lean(),
     Project.countDocuments(filter),
   ]);
 
@@ -198,6 +198,94 @@ const deleteProject = asyncHandler(async (req, res) => {
   res.json({ success: true, message: "Project deleted" });
 });
 
+/**
+ * @desc    Toggle pin state and optionally set order for a project
+ * @route   PATCH /api/projects/:id/pin
+ * @access  Private
+ */
+const pinProject = asyncHandler(async (req, res) => {
+  const project = await Project.findOne({
+    _id: req.params.id,
+    userId: req.user._id,
+    isDeleted: false,
+  });
+
+  if (!project) {
+    res.statusCode = 404;
+    throw new Error("Project not found");
+  }
+
+  project.pinned = !project.pinned;
+
+  // If pinning, assign a pinOrder so it sorts after existing pinned projects
+  if (project.pinned) {
+    const highestPinned = await Project.findOne({
+      userId: req.user._id,
+      isDeleted: false,
+      pinned: true,
+      _id: { $ne: project._id },
+    }).sort({ pinOrder: -1 }).lean();
+    project.pinOrder = highestPinned ? highestPinned.pinOrder + 1 : 0;
+  } else {
+    project.pinOrder = 0;
+  }
+
+  await project.save();
+  res.json({ success: true, data: project });
+});
+
+/**
+ * @desc    Reorder pinned projects
+ * @route   PATCH /api/projects/reorder-pins
+ * @access  Private
+ */
+const reorderPins = asyncHandler(async (req, res) => {
+  // orderedIds: array of project _id strings in desired order
+  const { orderedIds } = req.body;
+  if (!Array.isArray(orderedIds)) {
+    res.statusCode = 400;
+    throw new Error("orderedIds must be an array");
+  }
+
+  await Promise.all(
+    orderedIds.map((id, idx) =>
+      Project.updateOne(
+        { _id: id, userId: req.user._id, isDeleted: false },
+        { pinOrder: idx }
+      )
+    )
+  );
+
+  res.json({ success: true });
+});
+
+/**
+ * @desc    Get tasks linked to a project
+ * @route   GET /api/projects/:id/tasks
+ * @access  Private
+ */
+const getProjectTasks = asyncHandler(async (req, res) => {
+  const project = await Project.findOne({
+    _id: req.params.id,
+    userId: req.user._id,
+    isDeleted: false,
+  }).lean();
+
+  if (!project) {
+    res.statusCode = 404;
+    throw new Error("Project not found");
+  }
+
+  const tasks = await Task.find({
+    projectId: project._id,
+    isDeleted: false,
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.json({ success: true, data: tasks });
+});
+
 module.exports = {
   getProjects,
   getProject,
@@ -205,4 +293,7 @@ module.exports = {
   updateProject,
   toggleMilestone,
   deleteProject,
+  pinProject,
+  reorderPins,
+  getProjectTasks,
 };

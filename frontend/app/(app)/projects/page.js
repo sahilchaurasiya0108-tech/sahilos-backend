@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import {
   Plus, Trash2, Edit2, ExternalLink, CheckCircle, Circle,
   FolderOpen, X, GitBranch, Target, ChevronRight,
-  Calendar, BarChart3, Globe, Loader2,
+  Calendar, BarChart3, Globe, Loader2, Pin, PinOff,
+  GripVertical, ChevronDown, ChevronUp, Clock, AlertCircle,
 } from "lucide-react";
 import { useProjects } from "@/hooks/useProjects";
 import { Button, Badge, ProgressBar, Spinner, EmptyState, Input, Select, Textarea } from "@/components/ui";
@@ -17,6 +18,20 @@ import NooriCard, { NooriDrawer } from "@/components/projects/NooriCard";
 import NooriEditModal from "@/components/projects/NooriEditModal";
 
 const statusMeta = (value) => PROJECT_STATUSES.find((s) => s.value === value);
+
+const PRIORITY_META = {
+  urgent: { label: "Urgent", color: "text-red-400" },
+  high:   { label: "High",   color: "text-orange-400" },
+  medium: { label: "Medium", color: "text-amber-400" },
+  low:    { label: "Low",    color: "text-slate-500" },
+};
+
+const TASK_STATUS_META = {
+  "todo":        { label: "To Do",       color: "bg-slate-500/20 text-slate-400" },
+  "in-progress": { label: "In Progress", color: "bg-blue-500/20 text-blue-400" },
+  "review":      { label: "Review",      color: "bg-amber-500/20 text-amber-400" },
+  "done":        { label: "Done",        color: "bg-emerald-500/20 text-emerald-400" },
+};
 
 // ── Project Modal ─────────────────────────────────────────────────────────────
 function ProjectModal({ open, onClose, onSave, initial }) {
@@ -56,10 +71,8 @@ function ProjectModal({ open, onClose, onSave, initial }) {
           </Select>
           <Input label="Repo / GitHub URL" value={form.repoLink} onChange={set("repoLink")} placeholder="https://github.com/…" />
         </div>
-        {/* NEW: Live URL field */}
         <Input label="Live / Deployed URL" value={form.liveUrl || ""} onChange={set("liveUrl")} placeholder="https://yoursite.com" />
 
-        {/* Color picker */}
         <div>
           <p className="text-xs font-medium text-slate-400 mb-2">Colour</p>
           <div className="flex gap-2 flex-wrap">
@@ -72,7 +85,6 @@ function ProjectModal({ open, onClose, onSave, initial }) {
           </div>
         </div>
 
-        {/* Categories multi-select */}
         <div>
           <p className="text-xs font-medium text-slate-400 mb-2">Categories <span className="text-slate-600">(pick one or more)</span></p>
           <div className="flex gap-2 flex-wrap">
@@ -102,7 +114,6 @@ function ProjectModal({ open, onClose, onSave, initial }) {
           </div>
         </div>
 
-        {/* Milestones */}
         <div>
           <p className="text-xs font-medium text-slate-400 mb-2">Milestones</p>
           <div className="flex gap-2 mb-2">
@@ -134,7 +145,7 @@ function ProjectModal({ open, onClose, onSave, initial }) {
 }
 
 // ── Progress Ring ─────────────────────────────────────────────────────────────
-function ProgressRing({ value, color, size = 64 }) {
+const ProgressRing = memo(function ProgressRing({ value, color, size = 64 }) {
   const r    = (size - 8) / 2;
   const circ = 2 * Math.PI * r;
   const dash = (value / 100) * circ;
@@ -149,6 +160,113 @@ function ProgressRing({ value, color, size = 64 }) {
         fill="#e2e8f0" fontSize={13} fontWeight={600}>{value}%</text>
     </svg>
   );
+});
+
+// ── Linked Tasks Section ──────────────────────────────────────────────────────
+function LinkedTasksSection({ projectId }) {
+  const [tasks, setTasks]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [expanded, setExpanded] = useState(true);
+  const [error, setError]       = useState(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    setLoading(true);
+    api.get(`/projects/${projectId}/tasks`)
+      .then((res) => { setTasks(res.data.data); setError(null); })
+      .catch(() => setError("Failed to load tasks"))
+      .finally(() => setLoading(false));
+  }, [projectId]);
+
+  if (loading) {
+    return (
+      <section>
+        <SectionLabel>Linked Tasks</SectionLabel>
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <Loader2 size={12} className="animate-spin" /> Loading tasks…
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section>
+        <SectionLabel>Linked Tasks</SectionLabel>
+        <p className="text-xs text-slate-500">{error}</p>
+      </section>
+    );
+  }
+
+  if (tasks.length === 0) {
+    return (
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <SectionLabel className="mb-0">Linked Tasks</SectionLabel>
+          <span className="text-xs text-slate-600">none yet</span>
+        </div>
+        <p className="text-xs text-slate-600 italic">No tasks linked to this project.</p>
+      </section>
+    );
+  }
+
+  const done = tasks.filter((t) => t.status === "done").length;
+
+  return (
+    <section>
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className="w-full flex items-center justify-between mb-3 group"
+      >
+        <SectionLabel className="mb-0">
+          Linked Tasks <span className="text-slate-600 font-normal normal-case tracking-normal ml-1">({done}/{tasks.length} done)</span>
+        </SectionLabel>
+        {expanded
+          ? <ChevronUp size={13} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+          : <ChevronDown size={13} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+        }
+      </button>
+
+      {expanded && (
+        <div className="space-y-1.5">
+          {tasks.map((task) => {
+            const sm = TASK_STATUS_META[task.status] || TASK_STATUS_META["todo"];
+            const pm = PRIORITY_META[task.priority] || PRIORITY_META["medium"];
+            const isDone = task.status === "done";
+            return (
+              <div key={task._id}
+                className="bg-surface-2 rounded-lg px-3 py-2.5 flex items-start gap-2.5">
+                <div className="mt-0.5 shrink-0">
+                  {isDone
+                    ? <CheckCircle size={13} className="text-success" />
+                    : <Circle size={13} className="text-slate-600" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={clsx("text-sm leading-snug", isDone ? "line-through text-slate-500" : "text-slate-200")}>
+                    {task.title}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className={clsx("text-[10px] px-1.5 py-0.5 rounded-full font-medium", sm.color)}>
+                      {sm.label}
+                    </span>
+                    <span className={clsx("text-[10px] font-medium", pm.color)}>
+                      {pm.label}
+                    </span>
+                    {task.dueDate && (
+                      <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                        <Calendar size={9} />
+                        {new Date(task.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }
 
 // ── Project Detail Drawer ─────────────────────────────────────────────────────
@@ -157,7 +275,6 @@ function ProjectDrawer({ projectId, projectColor, onClose, onEdit, onDelete, onM
   const [loading, setLoading]   = useState(true);
   const [toggling, setToggling] = useState(null);
 
-  // FIX: Fetch the SINGLE project endpoint to get taskStats
   useEffect(() => {
     if (!projectId) return;
     setLoading(true);
@@ -171,7 +288,6 @@ function ProjectDrawer({ projectId, projectColor, onClose, onEdit, onDelete, onM
     setToggling(milestoneId);
     try {
       await onMilestoneToggle(projectId, milestoneId);
-      // Refresh drawer data after toggle
       const res = await api.get(`/projects/${projectId}`);
       setProject(res.data.data);
     } finally { setToggling(null); }
@@ -213,12 +329,10 @@ function ProjectDrawer({ projectId, projectColor, onClose, onEdit, onDelete, onM
             {project && <>
               <button onClick={handleEdit}
                 className="p-2 rounded-lg text-slate-400 hover:text-brand hover:bg-white/5 transition-colors">
-                <Edit2 size={15} />
-              </button>
+                <Edit2 size={15} /></button>
               <button onClick={handleDelete}
                 className="p-2 rounded-lg text-slate-400 hover:text-danger hover:bg-danger/5 transition-colors">
-                <Trash2 size={15} />
-              </button>
+                <Trash2 size={15} /></button>
             </>}
             <button onClick={onClose}
               className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors">
@@ -251,7 +365,6 @@ function ProjectDrawer({ projectId, projectColor, onClose, onEdit, onDelete, onM
                   <Target size={11} />Milestones done
                 </p>
               </div>
-              {/* FIX: Now shows real task count from single endpoint */}
               <div className="bg-surface-2 rounded-xl p-4 flex flex-col justify-center">
                 <p className="text-2xl font-bold text-slate-100">{totalTasks}</p>
                 <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
@@ -338,20 +451,8 @@ function ProjectDrawer({ projectId, projectColor, onClose, onEdit, onDelete, onM
               </section>
             )}
 
-            {/* Task breakdown — only show if tasks exist */}
-            {totalTasks > 0 && (
-              <section>
-                <SectionLabel>Tasks by status</SectionLabel>
-                <div className="space-y-1.5">
-                  {Object.entries(taskCounts).map(([st, count]) => (
-                    <div key={st} className="flex items-center justify-between bg-surface-2 rounded-lg px-3 py-2">
-                      <span className="text-sm text-slate-400 capitalize">{st.replace(/-/g, " ")}</span>
-                      <span className="text-sm font-medium text-slate-200">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            {/* ── LINKED TASKS — full list, clickable/expandable ── */}
+            <LinkedTasksSection projectId={projectId} />
 
             {/* Notes */}
             {project.notes && (
@@ -387,7 +488,7 @@ function SectionLabel({ children, className = "mb-2" }) {
 }
 
 // ── Project Card ──────────────────────────────────────────────────────────────
-function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
+const ProjectCard = memo(function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle, onPin, dragging }) {
   // 🌙 Special treatment for Noori
   if (project.title?.toLowerCase().startsWith("noori")) {
     return (
@@ -397,6 +498,7 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
         onEdit={onEdit}
         onDelete={onDelete}
         onMilestoneToggle={onMilestoneToggle}
+        onPin={onPin}
       />
     );
   }
@@ -405,7 +507,27 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
   const done   = project.milestones?.filter((m) => m.done).length || 0;
 
   return (
-    <div className="card-hover p-5 group flex flex-col gap-3 cursor-pointer relative" onClick={() => onView(project)}>
+    <div
+      className={clsx(
+        "card-hover p-5 group flex flex-col gap-3 cursor-pointer relative h-full",
+        dragging && "opacity-50 scale-95"
+      )}
+      onClick={() => onView(project)}
+    >
+      {/* Pin button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onPin(project._id); }}
+        className={clsx(
+          "absolute top-3 left-3 p-1.5 rounded-md transition-all z-10",
+          project.pinned
+            ? "text-amber-400 opacity-100"
+            : "text-slate-600 opacity-0 group-hover:opacity-100 hover:text-amber-400"
+        )}
+        title={project.pinned ? "Unpin project" : "Pin to top"}
+      >
+        {project.pinned ? <Pin size={12} /> : <Pin size={12} />}
+      </button>
+
       <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}>
         <button onClick={() => onEdit(project)}
@@ -416,14 +538,17 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
           <Trash2 size={13} /></button>
       </div>
 
-      <div className="flex items-center gap-3 min-w-0 pr-14">
+      <div className="flex items-center gap-3 min-w-0 pr-14 pl-5">
         <div className="h-3 w-3 rounded-full shrink-0" style={{ background: project.color }} />
         <p className="font-semibold text-slate-200 truncate">{project.title}</p>
+        {project.pinned && (
+          <span className="text-[9px] text-amber-400/70 font-medium uppercase tracking-wider shrink-0">pinned</span>
+        )}
       </div>
 
-      {project.description && <p className="text-xs text-slate-500 line-clamp-2">{project.description}</p>}
+      {project.description && <p className="text-xs text-slate-500 line-clamp-2 pl-5">{project.description}</p>}
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap pl-5">
         {status && <Badge className={status.color}>{status.label}</Badge>}
         {project.categories?.map((cat) => {
           const meta = PROJECT_CATEGORIES.find((c) => c.value === cat);
@@ -447,7 +572,7 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
         )}
       </div>
 
-      <div>
+      <div className="pl-5">
         <div className="flex justify-between text-xs text-slate-500 mb-1">
           <span>Progress</span><span>{project.progress}%</span>
         </div>
@@ -455,7 +580,7 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
       </div>
 
       {project.milestones?.length > 0 && (
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 pl-5">
           {project.milestones.slice(0, 3).map((m) => (
             <div key={m._id}
               onClick={(e) => { e.stopPropagation(); onMilestoneToggle(project._id, m._id); }}
@@ -465,7 +590,7 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
             </div>
           ))}
           {project.milestones.length > 3 && (
-            <p className="text-xs text-slate-600 flex items-center gap-1">
+            <p className="text-xs text-slate-600 flex items-center gap-1 pl-0">
               +{project.milestones.length - 3} more <ChevronRight size={10} />
             </p>
           )}
@@ -477,30 +602,114 @@ function ProjectCard({ project, onView, onEdit, onDelete, onMilestoneToggle }) {
       </div>
     </div>
   );
+});
+
+// ── Pinned drag-to-reorder section ────────────────────────────────────────────
+function PinnedSection({ pinned, onView, onEdit, onDelete, onMilestoneToggle, onPin, onReorder }) {
+  const [draggingIdx, setDraggingIdx] = useState(null);
+  const [overIdx, setOverIdx]         = useState(null);
+  const draggedId = useRef(null);
+
+  if (pinned.length === 0) return null;
+
+  const handleDragStart = (e, idx) => {
+    setDraggingIdx(idx);
+    draggedId.current = pinned[idx]._id;
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setOverIdx(idx);
+  };
+
+  const handleDrop = (e, toIdx) => {
+    e.preventDefault();
+    const fromIdx = draggingIdx;
+    if (fromIdx === null || fromIdx === toIdx) {
+      setDraggingIdx(null); setOverIdx(null);
+      return;
+    }
+    const reordered = [...pinned];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    onReorder(reordered.map((p) => p._id));
+    setDraggingIdx(null); setOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingIdx(null); setOverIdx(null);
+  };
+
+  return (
+    <div className="mb-2">
+      <div className="flex items-center gap-2 mb-3">
+        <Pin size={12} className="text-amber-400" />
+        <p className="text-xs font-medium text-amber-400/80 uppercase tracking-wider">Pinned</p>
+        {pinned.length > 1 && (
+          <p className="text-xs text-slate-600 ml-auto flex items-center gap-1">
+            <GripVertical size={10} /> drag to reorder
+          </p>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        {pinned.map((p, idx) => (
+          <div
+            key={p._id}
+            draggable
+            onDragStart={(e) => handleDragStart(e, idx)}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={(e) => handleDrop(e, idx)}
+            onDragEnd={handleDragEnd}
+            className={clsx(
+              "flex flex-col transition-all rounded-2xl",
+              overIdx === idx && draggingIdx !== idx && "ring-2 ring-amber-400/40 ring-offset-0"
+            )}
+          >
+            <ProjectCard
+              project={p}
+              onView={onView}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onMilestoneToggle={onMilestoneToggle}
+              onPin={onPin}
+              dragging={draggingIdx === idx}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
-  const [modalOpen, setModal]           = useState(false);
-  const [nooriModalOpen, setNooriModal] = useState(false);
-  const [editing, setEditing]           = useState(null);
-  const [viewingId, setViewingId]       = useState(null);
-  const [viewingColor, setViewingColor] = useState(null);
+  const [modalOpen, setModal]               = useState(false);
+  const [nooriModalOpen, setNooriModal]     = useState(false);
+  const [editing, setEditing]               = useState(null);
+  const [viewingId, setViewingId]           = useState(null);
+  const [viewingColor, setViewingColor]     = useState(null);
   const [viewingIsNoori, setViewingIsNoori] = useState(false);
   const [activeCategory, setActiveCategory] = useState(null);
 
-  const { projects, loading, createProject, updateProject, toggleMilestone, deleteProject } = useProjects();
+  const {
+    projects, loading,
+    createProject, updateProject, toggleMilestone, deleteProject,
+    pinProject, reorderPins,
+  } = useProjects();
 
-  const openEdit = (p) => {
+  const openEdit   = (p) => {
     setEditing(p);
-    if (p?.title?.toLowerCase().startsWith("noori")) {
-      setNooriModal(true);
-    } else {
-      setModal(true);
-    }
+    if (p?.title?.toLowerCase().startsWith("noori")) setNooriModal(true);
+    else setModal(true);
   };
   const openCreate = () => { setEditing(null); setModal(true); };
-  const openView   = (p) => { setViewingId(p._id); setViewingColor(p.color); setViewingIsNoori(p.title?.toLowerCase().startsWith("noori") || false); };
+  const openView   = (p) => {
+    setViewingId(p._id);
+    setViewingColor(p.color);
+    setViewingIsNoori(p.title?.toLowerCase().startsWith("noori") || false);
+  };
 
   const handleSave = async (payload) => {
     if (editing) await updateProject(editing._id, payload);
@@ -513,9 +722,20 @@ export default function ProjectsPage() {
     await deleteProject(id);
   };
 
-  const filteredProjects = activeCategory
+  const handlePin = useCallback(async (id) => {
+    await pinProject(id);
+  }, [pinProject]);
+
+  const handleReorder = useCallback(async (orderedIds) => {
+    await reorderPins(orderedIds);
+  }, [reorderPins]);
+
+  const filtered = activeCategory
     ? projects.filter((p) => p.categories?.includes(activeCategory))
     : projects;
+
+  const pinnedProjects = filtered.filter((p) => p.pinned);
+  const restProjects   = filtered.filter((p) => !p.pinned);
 
   return (
     <PageWrapper>
@@ -523,7 +743,7 @@ export default function ProjectsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="page-title">Projects</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{filteredProjects.length} project{filteredProjects.length !== 1 ? "s" : ""}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{filtered.length} project{filtered.length !== 1 ? "s" : ""}</p>
           </div>
           <Button variant="primary" onClick={openCreate}><Plus size={15} /> New Project</Button>
         </div>
@@ -559,20 +779,49 @@ export default function ProjectsPage() {
 
         {loading ? (
           <div className="flex justify-center py-20"><Spinner size="lg" /></div>
-        ) : filteredProjects.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <EmptyState icon={FolderOpen} title="No projects here" description={activeCategory ? "No projects in this category yet." : "Start building something great."}
             action={<Button variant="primary" onClick={openCreate}><Plus size={15} />New Project</Button>} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredProjects.map((p) => (
-              <ProjectCard key={p._id} project={p} onView={openView}
-                onEdit={openEdit} onDelete={handleDelete} onMilestoneToggle={toggleMilestone} />
-            ))}
+          <div className="space-y-6">
+            {/* Pinned section with drag-to-reorder */}
+            {pinnedProjects.length > 0 && (
+              <PinnedSection
+                pinned={pinnedProjects}
+                onView={openView}
+                onEdit={openEdit}
+                onDelete={handleDelete}
+                onMilestoneToggle={toggleMilestone}
+                onPin={handlePin}
+                onReorder={handleReorder}
+              />
+            )}
+
+            {/* Rest of projects */}
+            {restProjects.length > 0 && (
+              <div>
+                {pinnedProjects.length > 0 && (
+                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wider mb-3">Other Projects</p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {restProjects.map((p) => (
+                    <ProjectCard
+                      key={p._id}
+                      project={p}
+                      onView={openView}
+                      onEdit={openEdit}
+                      onDelete={handleDelete}
+                      onMilestoneToggle={toggleMilestone}
+                      onPin={handlePin}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* FIX: Drawer fetches single project by ID — gets real taskStats */}
       {viewingId && (
         viewingIsNoori
           ? <NooriDrawer

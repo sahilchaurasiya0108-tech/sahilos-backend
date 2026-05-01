@@ -73,6 +73,16 @@ const projectSchema = new mongoose.Schema(
       },
       default: [],
     },
+    // ── Pinning ───────────────────────────────────────────────────────────────
+    pinned: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    pinOrder: {
+      type: Number,
+      default: 0,
+    },
     // ── Soft delete ──────────────────────────────────────────────────────────
     isDeleted: {
       type: Boolean,
@@ -86,5 +96,6 @@ const projectSchema = new mongoose.Schema(
 );
 
 projectSchema.index({ userId: 1, isDeleted: 1, status: 1 });
+projectSchema.index({ userId: 1, isDeleted: 1, pinned: 1, pinOrder: 1 });
 
 module.exports = mongoose.model("Project", projectSchema);
