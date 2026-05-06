@@ -22,6 +22,8 @@ export const metadata = {
   description:
     "Your personal operating system. Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
 
+  manifest: "/site.webmanifest",
+
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
     apple: "/apple-touch-icon.svg",

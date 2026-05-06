@@ -1,0 +1,24 @@
+{
+  "name": "SahilOS — Personal OS",
+  "short_name": "SahilOS",
+  "description": "Your personal operating system. Tasks, projects, habits, journal, budget, AI assistant — all in one place.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#6366f1",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
